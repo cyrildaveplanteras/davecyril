@@ -1,0 +1,194 @@
+{
+  "date": "2026-08-20T06:23:02.003Z",
+  "tables": {
+    "ref_regions": {
+      "found": 18,
+      "migrated": 18,
+      "failed": 0,
+      "errors": []
+    },
+    "provinces": {
+      "found": 1,
+      "migrated": 1,
+      "failed": 0,
+      "errors": []
+    },
+    "ref_provinces": {
+      "found": 83,
+      "migrated": 83,
+      "failed": 0,
+      "errors": []
+    },
+    "municipalities": {
+      "found": 27,
+      "migrated": 27,
+      "failed": 0,
+      "errors": []
+    },
+    "ref_municipalities": {
+      "found": 1596,
+      "migrated": 1596,
+      "failed": 0,
+      "errors": []
+    },
+    "barangays": {
+      "found": 691,
+      "migrated": 691,
+      "failed": 0,
+      "errors": []
+    },
+    "ref_barangays": {
+      "found": 40485,
+      "migrated": 40485,
+      "failed": 0,
+      "errors": []
+    },
+    "users": {
+      "found": 2,
+      "migrated": 2,
+      "failed": 0,
+      "errors": []
+    },
+    "branches": {
+      "found": 1,
+      "migrated": 1,
+      "failed": 0,
+      "errors": []
+    },
+    "commission_config": {
+      "found": 1,
+      "migrated": 1,
+      "failed": 0,
+      "errors": []
+    },
+    "sales_coordinators": {
+      "found": 17,
+      "migrated": 17,
+      "failed": 0,
+      "errors": []
+    },
+    "barangay_coordinators": {
+      "found": 0,
+      "migrated": 0,
+      "failed": 0,
+      "errors": []
+    },
+    "app_settings": {
+      "found": 0,
+      "migrated": 0,
+      "failed": 0,
+      "errors": []
+    },
+    "members": {
+      "found": 868,
+      "migrated": 868,
+      "failed": 0,
+      "errors": []
+    },
+    "remittances": {
+      "found": 28,
+      "migrated": 28,
+      "failed": 0,
+      "errors": []
+    },
+    "remittance_details": {
+      "found": 966,
+      "migrated": 966,
+      "failed": 0,
+      "errors": []
+    },
+    "commission_transactions": {
+      "found": 965,
+      "migrated": 965,
+      "failed": 0,
+      "errors": []
+    },
+    "death_cases": {
+      "found": 12,
+      "migrated": 12,
+      "failed": 0,
+      "errors": []
+    },
+    "damayan_deductions": {
+      "found": 1290,
+      "migrated": 1290,
+      "failed": 0,
+      "errors": []
+    },
+    "hda_deductions": {
+      "found": 0,
+      "migrated": 0,
+      "failed": 0,
+      "errors": []
+    },
+    "membership_audit_log": {
+      "found": 855,
+      "migrated": 855,
+      "failed": 0,
+      "errors": []
+    },
+    "notifications": {
+      "found": 2347,
+      "migrated": 2347,
+      "failed": 0,
+      "errors": []
+    },
+    "pending_remittances": {
+      "found": 20,
+      "migrated": 20,
+      "failed": 0,
+      "errors": []
+    },
+    "lock_logs": {
+      "found": 0,
+      "migrated": 0,
+      "failed": 0,
+      "errors": []
+    },
+    "login_attempts": {
+      "found": 0,
+      "migrated": 0,
+      "failed": 0,
+      "errors": []
+    },
+    "activitylogs": {
+      "found": 135,
+      "migrated": 135,
+      "failed": 0,
+      "errors": []
+    },
+    "data_change_log": {
+      "found": 1,
+      "migrated": 1,
+      "failed": 0,
+      "errors": []
+    },
+    "personnel": {
+      "found": 3,
+      "migrated": 3,
+      "failed": 0,
+      "errors": []
+    },
+    "psgc_audit_log": {
+      "found": 0,
+      "migrated": 0,
+      "failed": 0,
+      "errors": []
+    },
+    "psgc_import_logs": {
+      "found": 1,
+      "migrated": 1,
+      "failed": 0,
+      "errors": []
+    },
+    "psgc_migration_logs": {
+      "found": 0,
+      "migrated": 0,
+      "failed": 0,
+      "errors": []
+    }
+  },
+  "mismatches": [],
+  "financialChecks": 15,
+  "status": "SUCCESS"
+}

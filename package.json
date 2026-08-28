@@ -1,0 +1,91 @@
+{
+  "name": "goldenhope-app",
+  "version": "1.4.0",
+  "description": "Golden Hope Member Management System",
+  "author": "GoldenHope",
+  "main": "main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cyrildaveplanteras/davecyril.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "init-db": "node scripts/init-db.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "node scripts/build-win.js"
+  },
+  "build": {
+    "appId": "com.goldenhope.app",
+    "productName": "GoldenHope",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/.cache/**/*",
+      "!.opencode/**/*",
+      "!release/**/*",
+      "!release-140/**/*",
+      "!**/.env",
+      "!**/.env.local",
+      "!*.xlsx",
+      "!*.pdf",
+      "!fix-*.js",
+      "!migrate-afno.js",
+      "!e51c0f8c-ae1b-4179-9317-30443f4529c9.png",
+      "!converted_dump.sql",
+      "!setup-new-pc.bat",
+      "!scripts/convert-mysql-dump-to-pg.js",
+      "!FINAL_REPORT.md",
+      "!scripts/test-*.js",
+      "!scripts/_compare_restore.js",
+      "!goldenhope_backup_*.sql",
+      "!GOLDENHOPE_DATABASE_*",
+      "!PSGC_*",
+      "!data-schema.json",
+      "!**/*.sql.dump",
+      "!*.dump",
+      "!*.pfx",
+      "!scripts/archive/**/*",
+      "!backups/**/*",
+      "!docs/**/*",
+      "!.github/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GoldenHope",
+      "uninstallDisplayName": "GoldenHope Member Management System",
+      "installerSidebar": null,
+      "runAfterFinish": false,
+      "guid": "b5a6a4a2-9c7d-4e3f-8a1b-2c3d4e5f6a7b"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "cyrildaveplanteras",
+      "repo": "davecyril"
+    }
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "chart.js": "^4.4.0",
+    "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.9",
+    "exceljs": "^4.4.0",
+    "mysql2": "^3.11.0",
+    "pg": "^8.23.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
+  }
+}

@@ -1,0 +1,64 @@
+/* Local @font-face declarations - replaces Google Fonts CDN for offline/cert-error environments */
+
+/* Inter (variable font - covers weights 400-700) */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('../fonts/inter-latin.woff2') format('woff2');
+}
+
+/* Poppins 300 */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../fonts/poppins-300-latin.woff2') format('woff2');
+}
+
+/* Poppins 400 */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/poppins-400-latin.woff2') format('woff2');
+}
+
+/* Poppins 500 */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/poppins-500-latin.woff2') format('woff2');
+}
+
+/* Poppins 600 */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/poppins-600-latin.woff2') format('woff2');
+}
+
+/* Poppins 700 */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/poppins-700-latin.woff2') format('woff2');
+}
+
+/* Poppins 800 */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('../fonts/poppins-800-latin.woff2') format('woff2');
+}
