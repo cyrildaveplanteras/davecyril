@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>GoldenHope - Login</title>
+  <link rel="stylesheet" href="../css/fonts.css">
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="login-container">
+    <!-- LEFT BRANDING PANEL -->
+    <div class="login-left">
+      <div class="login-pattern-overlay"></div>
+      <div class="login-wave-bg">
+        <svg viewBox="0 0 1440 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M0,400 C240,350 320,500 480,420 C640,340 800,520 960,440 C1120,360 1280,480 1440,400 L1440,900 L0,900 Z" fill="rgba(37,99,235,0.04)"/>
+          <path d="M0,500 C240,440 320,580 480,510 C640,440 800,600 960,530 C1120,460 1280,560 1440,500 L1440,900 L0,900 Z" fill="rgba(37,99,235,0.03)"/>
+          <path d="M0,600 C240,550 320,670 480,610 C640,550 800,690 960,630 C1120,570 1280,650 1440,600 L1440,900 L0,900 Z" fill="rgba(37,99,235,0.02)"/>
+        </svg>
+      </div>
+      <div class="login-geo-line login-geo-line--1"></div>
+      <div class="login-geo-line login-geo-line--2"></div>
+      <div class="login-geo-line login-geo-line--3"></div>
+      <div class="login-glow-orb login-glow-orb--1"></div>
+      <div class="login-glow-orb login-glow-orb--2"></div>
+      <div class="login-left-content">
+        <div class="login-branding">
+          <div class="login-logo-wrap">
+            <div class="login-logo-ring"></div>
+            <img src="../../assets/logo.png" alt="GoldenHope" onerror="this.style.display='none'" class="login-logo-img" loading="lazy">
+          </div>
+          <h1 class="login-brand-title">GOLDENHOPE</h1>
+          <p class="login-brand-sub">Damayan Association and Support Inc.</p>
+          <p class="login-brand-tag">"Efficient. Reliable. Secure."</p>
+        </div>
+        <div class="login-left-footer">
+          <p>Version 3.0</p>
+          <p>&copy; 2026 GoldenHope Management System</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT LOGIN PANEL -->
+    <div class="login-right">
+      <div class="login-card" id="loginCard">
+        <div class="login-card-header">
+          <h2>Welcome Back</h2>
+          <p>Sign in to continue to the GoldenHope Management System</p>
+        </div>
+
+        <div class="login-error" id="loginError" role="alert"></div>
+
+        <form id="loginForm" onsubmit="return false;" novalidate>
+          <div class="login-field" id="usernameField">
+            <label for="username">Username</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <input type="text" id="username" placeholder="Enter your username" autocomplete="username" autofocus aria-required="true" aria-label="Username">
+            </div>
+            <span class="login-field-error" id="usernameError" role="alert"></span>
+          </div>
+
+          <div class="login-field" id="passwordField">
+            <label for="password">Password</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password" aria-required="true" aria-label="Password">
+              <button class="password-toggle" id="togglePassword" type="button" tabindex="-1" aria-label="Show password">
+                <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-off-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            <span class="login-field-error" id="passwordError" role="alert"></span>
+          </div>
+
+          <div class="login-options">
+            <label class="login-checkbox">
+              <input type="checkbox" id="rememberMe" checked>
+              <span class="login-checkbox-mark"></span>
+              <span class="login-checkbox-label">Remember me</span>
+            </label>
+            <a href="#" class="login-forgot-link" id="forgotLink" tabindex="0" aria-label="Forgot password">Forgot password?</a>
+          </div>
+
+          <button class="login-btn" id="loginBtn" type="submit" aria-label="Sign in">
+            <span class="login-btn-text">Sign In</span>
+            <div class="login-btn-spinner">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>
+            </div>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== DOM REFS =====
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const loginBtn = document.getElementById('loginBtn');
+    const errorEl = document.getElementById('loginError');
+    const usernameError = document.getElementById('usernameError');
+    const passwordError = document.getElementById('passwordError');
+    const usernameField = document.getElementById('usernameField');
+    const passwordField = document.getElementById('passwordField');
+    const loginCard = document.getElementById('loginCard');
+
+    // ===== ENTER KEY NAVIGATION =====
+    usernameInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') passwordInput.focus();
+    });
+    passwordInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') handleLogin();
+    });
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      handleLogin();
+    });
+
+    // ===== PASSWORD VISIBILITY TOGGLE =====
+    const toggleBtn = document.getElementById('togglePassword');
+    const eyeIcon = toggleBtn.querySelector('.eye-icon');
+    const eyeOffIcon = toggleBtn.querySelector('.eye-off-icon');
+
+    toggleBtn.addEventListener('click', function() {
+      const isPassword = passwordInput.type === 'password';
+      passwordInput.type = isPassword ? 'text' : 'password';
+      eyeIcon.style.display = isPassword ? 'none' : '';
+      eyeOffIcon.style.display = isPassword ? '' : 'none';
+      toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    });
+
+    // ===== CLEAR FIELD ERRORS ON INPUT =====
+    usernameInput.addEventListener('input', function() {
+      usernameError.textContent = '';
+      usernameError.style.display = 'none';
+      usernameField.classList.remove('login-field--error');
+      errorEl.style.display = 'none';
+    });
+    passwordInput.addEventListener('input', function() {
+      passwordError.textContent = '';
+      passwordError.style.display = 'none';
+      passwordField.classList.remove('login-field--error');
+      errorEl.style.display = 'none';
+    });
+
+    // ===== INPUT FOCUS EVENTS FOR ICON HIGHLIGHT =====
+    document.querySelectorAll('.input-wrapper input').forEach(function(input) {
+      input.addEventListener('focus', function() {
+        this.closest('.input-wrapper').classList.add('input-wrapper--focused');
+      });
+      input.addEventListener('blur', function() {
+        this.closest('.input-wrapper').classList.remove('input-wrapper--focused');
+      });
+    });
+
+    // ===== FORGOT PASSWORD =====
+    document.getElementById('forgotLink').addEventListener('click', function(e) {
+      e.preventDefault();
+      showError('Please contact your system administrator to reset your password.');
+      loginCard.classList.remove('login-card--shake');
+      void loginCard.offsetWidth;
+      loginCard.classList.add('login-card--shake');
+    });
+
+    // ===== SHOW FIELD ERROR =====
+    function showFieldError(fieldEl, errorEl, msg) {
+      fieldEl.classList.add('login-field--error');
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+
+    // ===== SHOW GLOBAL ERROR =====
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+
+    // ===== LOGIN HANDLER (preserved logic, enhanced UI) =====
+    async function handleLogin() {
+      const username = usernameInput.value.trim();
+      const password = passwordInput.value;
+      const userAgent = navigator.userAgent || '';
+
+      // Clear previous errors
+      usernameError.textContent = '';
+      usernameError.style.display = 'none';
+      usernameField.classList.remove('login-field--error');
+      passwordError.textContent = '';
+      passwordError.style.display = 'none';
+      passwordField.classList.remove('login-field--error');
+      errorEl.style.display = 'none';
+      loginCard.classList.remove('login-card--shake');
+
+      // Validation
+      let hasError = false;
+      if (!username) {
+        showFieldError(usernameField, usernameError, 'Username is required.');
+        hasError = true;
+      }
+      if (!password) {
+        showFieldError(passwordField, passwordError, 'Password is required.');
+        hasError = true;
+      }
+      if (hasError) return;
+
+      loginBtn.disabled = true;
+      loginBtn.classList.add('loading');
+
+      try {
+        const result = await window.api.login(username, password);
+        if (result.success) {
+          const userData = { ...result.user, mustChangePassword: result.mustChangePassword || false };
+          sessionStorage.setItem('currentUser', JSON.stringify(userData));
+          try { await window.api.logActivity(result.user.id, 'Login', 'User ' + result.user.username + ' logged in successfully', '', userAgent, 'Success'); } catch (_) {}
+          window.location.href = 'main.html';
+        } else {
+          try { await window.api.logActivity(null, 'Login', 'Failed login attempt for user "' + username + '": ' + result.error, '', userAgent, 'Failed'); } catch (_) {}
+          showError('Invalid username or password.');
+          loginCard.classList.add('login-card--shake');
+          loginBtn.disabled = false;
+          loginBtn.classList.remove('loading');
+          if (passwordInput) {
+            passwordInput.value = '';
+            passwordInput.focus();
+          }
+        }
+      } catch (err) {
+        try { await window.api.logActivity(null, 'Login', 'Failed login attempt for user "' + username + '": Connection error', '', userAgent, 'Failed'); } catch (_) {}
+        showError('Connection error. Please try again.');
+        loginBtn.disabled = false;
+        loginBtn.classList.remove('loading');
+      }
+    }
+  </script>
+</body>
+</html>

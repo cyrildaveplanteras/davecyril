@@ -1,0 +1,17 @@
+node_modules/
+release/
+release-140/
+.env
+.env.local
+*.exe
+*.sql
+*.dump
+*.pfx
+*.pdf
+*.xlsx
+dist/
+out/
+backups/
+scripts/archive/
+db-config.json
+.opencode/
