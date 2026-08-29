@@ -1,6 +1,6 @@
 {
   "name": "goldenhope-app",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Golden Hope Member Management System",
   "author": "GoldenHope",
   "main": "main.js",
@@ -54,7 +54,10 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/logo.png"
+      "icon": "assets/logo.png",
+      "signtoolOptions": {
+        "sign": "./scripts/custom-sign.js"
+      }
     },
     "nsis": {
       "oneClick": false,
@@ -66,7 +69,8 @@
       "uninstallDisplayName": "GoldenHope Member Management System",
       "installerSidebar": null,
       "runAfterFinish": false,
-      "guid": "b5a6a4a2-9c7d-4e3f-8a1b-2c3d4e5f6a7b"
+      "guid": "b5a6a4a2-9c7d-4e3f-8a1b-2c3d4e5f6a7b",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "publish": {
       "provider": "github",

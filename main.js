@@ -68,7 +68,7 @@ const { ensurePostgresRunning, cleanupPostgres } = require('./src/js/auto-postgr
 const BusinessRules = require('./src/js/business-rules');
 const { runMigrations } = require('./src/js/pg-migrations');
 
-autoUpdater.autoDownload = true;
+autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.allowPrerelease = false;
 // Only log updater internals during development.
@@ -145,27 +145,22 @@ function safeCheckForUpdates() {
   // Never check for updates from an unpackaged dev build.
   if (!app.isPackaged) return;
   if (!isUpdateServerConfigured()) return;
-  try {
-    updaterState = { ...updaterState, status: 'checking', error: null };
-    broadcastUpdateStatus();
-    autoUpdater.checkForUpdates().catch((err) => {
-      updaterState = {
-        ...updaterState,
-        status: 'error',
-        error: err && err.message ? err.message : String(err)
-      };
-      broadcastUpdateStatus();
-      console.error('[UPDATE] check failed:', updaterState.error);
-    });
-  } catch (err) {
+  autoUpdater.checkForUpdates().catch((err) => {
+    // Silent fail: log but don't update UI state for network errors
+    const msg = err && err.message ? err.message : String(err);
+    if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|socket hang up|network|timeout|unreachable/i.test(msg)) {
+      console.log('[UPDATE] Check skipped (offline or network error):', msg);
+      return;
+    }
+    // Non-network errors: surface to UI
     updaterState = {
       ...updaterState,
       status: 'error',
-      error: err && err.message ? err.message : String(err)
+      error: msg
     };
     broadcastUpdateStatus();
-    console.error('[UPDATE] check threw:', updaterState.error);
-  }
+    console.error('[UPDATE] check failed:', msg);
+  });
 }
 
 // Turn a raw pg_dump/pg_restore/psql stderr into a user-actionable message when
@@ -297,10 +292,17 @@ autoUpdater.on('update-downloaded', (info) => {
   broadcastUpdateStatus();
 });
 autoUpdater.on('error', (err) => {
+  const msg = err && err.message ? err.message : String(err);
+  // Ignore network/connectivity errors - these are expected offline
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|socket hang up|network|timeout|unreachable/i.test(msg)) {
+    console.log('[UPDATE] Network error (offline):', msg);
+    return;
+  }
+  // Real errors (corrupt download, etc.) still surface
   updaterState = {
     ...updaterState,
     status: 'error',
-    error: err && err.message ? err.message : String(err)
+    error: msg
   };
   mainWindow?.webContents.send('update:error', updaterState.error);
   broadcastUpdateStatus();
@@ -2420,7 +2422,7 @@ ipcMain.handle('deduction:individual', async (event, { memberId, amount, reason,
     if (locked) return locked;
 
     // Validate member exists and is active
-    const [member] = await pool.execute('SELECT Id, full_name, af_no FROM members WHERE Id = ? AND member_status = "Active"', [memberId]);
+    const [member] = await pool.execute('SELECT Id, full_name, af_no FROM members WHERE Id = ? AND member_status = \'Active\'', [memberId]);
     if (!member.length) return { success: false, error: 'Member not found or not active' };
     if (!amount || amount <= 0) return { success: false, error: 'Amount must be greater than 0' };
 
