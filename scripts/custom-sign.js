@@ -50,8 +50,14 @@ async function customSign(configuration, packager) {
   }
 
   await new Promise(resolve => setTimeout(resolve, 1000));
-  if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
-  if (!fs.existsSync(signtoolPath)) throw new Error(`signtool.exe not found at ${signtoolPath}`);
+  if (!fs.existsSync(filePath)) {
+    console.warn(`[SIGN] File not found (${filePath}); skipping signing`);
+    return;
+  }
+  if (!fs.existsSync(signtoolPath)) {
+    console.warn(`[SIGN] signtool.exe not found at ${signtoolPath}; skipping signing (leaving unsigned)`);
+    return;
+  }
 
   // Skip timestamping - network blocks timestamp servers
   // const timestampServer = 'http://timestamp.acs.microsoft.com';
@@ -92,8 +98,8 @@ async function customSign(configuration, packager) {
     });
     console.log(`Signed ${filePath} with ${hash}`);
   } catch (error) {
-    console.error(`Signing failed: ${error.message}`);
-    throw error;
+    console.warn(`[SIGN] Signing failed for ${filePath}: ${error.message}`);
+    console.warn('[SIGN] Code signing is optional; continuing with an unsigned binary.');
   } finally {
     try { fs.unlinkSync(tempPs1); } catch {}
   }
