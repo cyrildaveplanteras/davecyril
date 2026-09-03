@@ -1728,10 +1728,12 @@ if (remittance.Id) {
       const cfg = await getCommissionConfigSql(conn);
       let netTotal = 0;
       for (const d of details) {
-        const mf = parseFloat(d.MF) || 0;
+        let mf = parseFloat(d.MF) || 0;
         const msc = parseFloat(d.MSC) || 0;
         const hda = parseFloat(d.HDA) || 0;
         const savings = parseFloat(d.Savings) || 0;
+        // Defense-in-depth: MF must be 0 for MSC-only or HDA-only remittances
+        if (d.paymentPurpose === 'msc' || d.paymentPurpose === 'hda') mf = 0;
         const total = Math.round((mf + msc + hda) * 100) / 100;
         const com = calcComServer(mf, msc, d.paymentPurpose, cfg);
         const netDeposit = Math.round((total - com) * 100) / 100;

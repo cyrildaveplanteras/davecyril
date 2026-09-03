@@ -301,9 +301,6 @@ async function refreshPendingList() {
 function addBlankRow() {
   remittanceRowCounter++;
   const rowId = remittanceRowCounter;
-  const cfg = commissionConfig || RULES.normalizeConfig(null);
-  const defaultMF = RULES.RULES.MF_OPTIONS[0];
-  const com = calcCOM(defaultMF, 0, cfg);
   remittanceDetails.push({
     rowId,
     memberId: null,
@@ -313,12 +310,12 @@ function addBlankRow() {
     membershipStatus: '',
     honoraryYears: 0,
     paymentPurpose: 'msc',
-    MF: defaultMF,
+    MF: 0,
     MSC: 0,
     Savings: 0,
-    Total: defaultMF,
-    COM: com,
-    NetDeposit: defaultMF - com
+    Total: 0,
+    COM: 0,
+    NetDeposit: 0
   });
   renderRemittanceDetails();
 }
@@ -460,7 +457,7 @@ async function assignMemberToRow(index) {
   d.SalesCoordinator = sc;
   d.membershipStatus = opt.dataset.ms || 'Regular';
   d.honoraryYears = parseInt(opt.dataset.hy) || 0;
-  await updateRowCalculations(index);
+  await updateRowPurpose(index);
   renderRemittanceDetails();
 }
 
