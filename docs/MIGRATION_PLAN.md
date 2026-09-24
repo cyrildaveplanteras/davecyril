@@ -87,7 +87,7 @@ All 31 MySQL tables re-created in PostgreSQL with identical names and column nam
 ## 6. Business Rules Preserved (spot checks)
 
 - First MSC → 0% commission; 2nd MSC onward → 5% (`MSC_COMMISSION_RATE`).
-- ₱120 Sales Coordinator commission per qualifying MF (250/350) remittance.
+- Two-tier Sales Coordinator commission: ₱120 for MF=350, ₱100 for MF=250 (amount-based `calcCommission`).
 - Remittance posting = single atomic transaction (validate → MF → MSC → commission → records →
   funds → statements → balances → COMMIT / ROLLBACK).
 - Monthly/system lock via `lock_logs` state machine (Scheduled → Active → Expired/Cancelled).

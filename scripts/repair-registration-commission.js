@@ -1,15 +1,15 @@
 const db = require('../src/js/database');
 const BusinessRules = require('../src/js/business-rules');
 
-// Repair: registration remittances must earn the flat ₱120 Sales Coordinator
-// commission. The registration remittance is the member's FIRST completed
-// deposit, which includes the membership fee (MF). Earlier reconciliation
-// wrongly zeroed MF on these rows (treating them as MSC-only deposits), which
-// left 209 first-deposit rows with MF=0 / COM=0.
+// Repair: registration remittances must earn the Sales Coordinator commission per
+// the two-tier business rule (MF=350 → ₱120, MF=250 → ₱100). The registration
+// remittance is the member's FIRST completed deposit, which includes the
+// membership fee (MF). Earlier reconciliation wrongly zeroed MF on these rows
+// (treating them as MSC-only deposits), which left 209 first-deposit rows with MF=0 / COM=0.
 //
 // This script restores:
 //   - MF = members.membership_fee  (the qualifying membership fee)
-//   - COM = 120  (flat commission, per business rule)
+//   - COM = calcCommission(...)    (two-tier: ₱120 for MF=350, ₱100 for MF=250)
 //   - Total = MF + MSC + HDA
 //   - NetDeposit = Total - COM
 //   - parent remittance TotalDeposit = SUM(NetDeposit)
@@ -117,7 +117,7 @@ async function main() {
     }
     await conn.execute(
       "INSERT INTO audit_logs (AdminUserId, Action, Description, CreatedAt) VALUES (NULL, 'Data Reconciliation', ?, NOW())",
-      [`Registration-remittance repair: ${fixed} first-deposit row(s) restored (MF = membership_fee, COM = ₱120, Total/NetDeposit recomputed, parent TotalDeposit updated for ${affected.size} remittance(s)).`]
+      [`Registration-remittance repair: ${fixed} first-deposit row(s) restored (MF = membership_fee, COM per two-tier rule ₱120/₱100, Total/NetDeposit recomputed, parent TotalDeposit updated for ${affected.size} remittance(s)).`]
     );
     await conn.commit();
     console.log('\nCommitted.');

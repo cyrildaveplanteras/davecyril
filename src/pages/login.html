@@ -5,6 +5,50 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'">
   <title>GoldenHope - Login</title>
+  <script>
+    // Renderer error trap: an uncaught error must surface (red banner + log file)
+    // instead of a silent white screen. Loads before every other script.
+    (function () {
+      function log(msg) {
+        try { if (window.api && window.api.logRendererError) window.api.logRendererError(msg); } catch (_) {}
+      }
+      function showBanner(text) {
+        try {
+          var b = document.getElementById('ghErrorBanner');
+          if (!b) {
+            b = document.createElement('div');
+            b.id = 'ghErrorBanner';
+            b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#DC2626;color:#fff;font:12px/1.4 Consolas,monospace;padding:10px 44px 10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.35);white-space:pre-wrap;word-break:break-word;max-height:40vh;overflow:auto;text-align:left;';
+            var close = document.createElement('button');
+            close.textContent = '\u2715';
+            close.style.cssText = 'position:absolute;top:4px;right:6px;background:none;border:none;color:#fff;font-size:16px;cursor:pointer;';
+            close.onclick = function () { b.remove(); };
+            b.appendChild(close);
+            (document.body || document.documentElement).appendChild(b);
+          }
+          var t = document.createElement('div');
+          t.style.marginTop = '4px';
+          t.textContent = text;
+          b.appendChild(t);
+          b.style.display = 'block';
+        } catch (_) {}
+      }
+      window.addEventListener('error', function (e) {
+        var m = (e && e.message) || 'Unknown script error';
+        var src = (e && e.filename) || '';
+        var line = (e && e.lineno) || '';
+        var short = src.replace(/^.*[\\\/]/, '');
+        log('[error] ' + m + ' @ ' + src + ':' + line);
+        showBanner('Script error: ' + m + ' @ ' + short + ':' + line);
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = (e && e.reason) || {};
+        var msg = (r && r.message) ? r.message : String(r && r.stack || r) || 'Unhandled promise rejection';
+        log('[rejection] ' + (r && r.stack || msg));
+        showBanner('Promise error: ' + msg);
+      });
+    })();
+  </script>
   <link rel="stylesheet" href="../css/fonts.css">
   <link rel="stylesheet" href="../css/styles.css">
 </head>
@@ -91,6 +135,38 @@
             </div>
           </button>
         </form>
+
+        <div id="mustChangeSection" class="login-card-section" style="display:none">
+          <div class="login-card-header">
+            <h2>Set a New Password</h2>
+            <p>Your password must be changed before you can continue.</p>
+          </div>
+          <div class="login-field">
+            <label for="newPassword">New Password (min 8 chars, upper + lower + number)</label>
+            <div class="input-wrapper">
+              <input type="password" id="newPassword" placeholder="Enter new password">
+            </div>
+          </div>
+          <div class="login-field">
+            <label for="confirmPassword">Confirm New Password</label>
+            <div class="input-wrapper">
+              <input type="password" id="confirmPassword" placeholder="Repeat new password">
+            </div>
+          </div>
+          <button class="login-btn" id="setPasswordBtn" type="button">Save &amp; Continue</button>
+        </div>
+
+        <div style="text-align:center;margin-top:16px">
+          <button type="button" onclick="toggleDiagnose()" style="background:none;border:none;cursor:pointer;text-decoration:underline;color:#2563EB;font-size:13px">Having trouble signing in? Diagnose</button>
+        </div>
+        <div id="diagnosePanel" style="display:none;margin-top:14px;text-align:left">
+          <textarea id="diagnoseReport" readonly placeholder="Click Diagnose again or press Copy Report to send the details to your administrator." style="width:100%;height:200px;font:11px/1.4 Consolas,monospace;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:10px;resize:vertical;white-space:pre-wrap"></textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button type="button" id="copyReportBtn" class="login-btn" style="flex:1;min-width:130px">Copy Report</button>
+            <button type="button" id="resetAdminBtn" class="login-btn" style="flex:1;min-width:180px;background:#DC2626">Reset admin to 'admin'</button>
+          </div>
+          <div class="login-error" id="diagMsg" style="display:none;margin-top:8px"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -210,15 +286,27 @@
       loginBtn.classList.add('loading');
 
       try {
-        const result = await window.api.login(username, password);
+        // Time out instead of spinning forever when the DB never responds.
+        const result = await Promise.race([
+          window.api.login(username, password),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('LOGIN_TIMEOUT')), 25000))
+        ]);
         if (result.success) {
           const userData = { ...result.user, mustChangePassword: result.mustChangePassword || false };
           sessionStorage.setItem('currentUser', JSON.stringify(userData));
           try { await window.api.logActivity(result.user.id, 'Login', 'User ' + result.user.username + ' logged in successfully', '', userAgent, 'Success'); } catch (_) {}
-          window.location.href = 'main.html';
+          if (userData.mustChangePassword) {
+            pendingUser = result.user;
+            pendingCurrentPassword = password;
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('mustChangeSection').style.display = 'block';
+            document.getElementById('newPassword').focus();
+          } else {
+            window.location.href = 'main.html';
+          }
         } else {
           try { await window.api.logActivity(null, 'Login', 'Failed login attempt for user "' + username + '": ' + result.error, '', userAgent, 'Failed'); } catch (_) {}
-          showError('Invalid username or password.');
+          showError(result.error || 'Invalid username or password.');
           loginCard.classList.add('login-card--shake');
           loginBtn.disabled = false;
           loginBtn.classList.remove('loading');
@@ -228,12 +316,124 @@
           }
         }
       } catch (err) {
-        try { await window.api.logActivity(null, 'Login', 'Failed login attempt for user "' + username + '": Connection error', '', userAgent, 'Failed'); } catch (_) {}
-        showError('Connection error. Please try again.');
+        let message = 'Connection error. Please try again.';
+        if (err && err.message === 'LOGIN_TIMEOUT') {
+          message = 'Login is not responding. The database may be down or starting up. Please wait a minute and try again.';
+        }
+        try { await window.api.logActivity(null, 'Login', 'Failed login attempt for user "' + username + '": ' + message, '', userAgent, 'Failed'); } catch (_) {}
+        showError(message);
         loginBtn.disabled = false;
         loginBtn.classList.remove('loading');
       }
     }
+  // ===== DIAGNOSE LOGIN PROBLEMS =====
+    let pendingUser = null;
+    let pendingCurrentPassword = null;
+
+    async function toggleDiagnose() {
+      const panel = document.getElementById('diagnosePanel');
+      const isHidden = panel.style.display === 'none';
+      panel.style.display = isHidden ? 'block' : 'none';
+      if (isHidden) await runDiagnose();
+    }
+
+    async function runDiagnose() {
+      const ta = document.getElementById('diagnoseReport');
+      const msgEl = document.getElementById('diagMsg');
+      msgEl.style.display = 'none';
+      function fail(msg) {
+        ta.value = 'Diagnose failed: ' + msg + '\n\nThis is also being logged. Send this text to your administrator.';
+        msgEl.textContent = 'Could not complete the check: ' + msg;
+        msgEl.style.display = 'block';
+      }
+      try {
+        const report = await window.api.diagnose();
+        if (!report) { fail('empty response'); return; }
+        const r = {
+          AppVersion: report.appVersion || '?',
+          Packaged: report.packaged === true ? 'yes' : 'no',
+          DBEndpoint: (report.endpoint ? report.endpoint.user + '@' + report.endpoint.host + ':' + report.endpoint.port + '/' + report.endpoint.database + ' (password ' + report.endpoint.password + ')' : 'unknown'),
+          PG_BinDir: report.pgBinDir || '',
+          PG_DataDir: report.pgDataDir || '',
+          DBReachable: report.reachable ? 'YES' : 'NO',
+          ConnectError: report.connectError || '',
+          UserCount: report.usersCount,
+          Users: (report.adminUsers || []).map(function (u) {
+            return '  #' + u.Id + ' "' + (u.Username || '') + '" role=' + (u.Role || '') + ' active=' + u.IsActive + ' locked=' + u.IsLocked + ' mustChange=' + u.MustChangePassword + ' hash=' + (u.hashScheme || '?') + ' lastLogin=' + (u.LastLogin || 'never');
+          }).join('\n'),
+          RecentFailedAttempts: (report.loginAttempts || []).map(function (a) {
+            return '  "' + a.username + '" attempts=' + a.attempt_count + ' lockedUntil=' + (a.locked_until || 'none');
+          }).join('\n') || '  none'
+        };
+        const lines = [];
+        for (const k in r) lines.push(k + ': ' + r[k]);
+        ta.value = lines.join('\n');
+      } catch (err) {
+        fail((err && err.message) || String(err));
+      }
+    }
+
+    document.getElementById('copyReportBtn').addEventListener('click', function () {
+      const ta = document.getElementById('diagnoseReport');
+      if (!ta.value) { runDiagnose(); return; }
+      ta.select();
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(ta.value).then(function () { showError('Report copied. Paste it to your administrator.'); }).catch(function () { document.execCommand('copy'); showError('Report copied to clipboard.'); });
+        } else {
+          document.execCommand('copy');
+          showError('Report copied to clipboard.');
+        }
+      } catch (_) {
+        showError('Copy failed. Select all the text above manually.');
+      }
+    });
+
+    document.getElementById('resetAdminBtn').addEventListener('click', async function () {
+      const msgEl = document.getElementById('diagMsg');
+      if (!window.confirm('This resets the admin account to username "admin" / password "admin" and forces a password change on next login. Continue?')) return;
+      try {
+        const res = await window.api.resetDefaultLogin(true);
+        msgEl.style.display = 'block';
+        msgEl.textContent = res.success
+          ? 'Admin has been reset. Sign in with admin / admin (you will be asked to set a new password).'
+          : 'Reset failed: ' + (res.error || 'unknown error');
+        await runDiagnose();
+      } catch (err) {
+        msgEl.style.display = 'block';
+        msgEl.textContent = 'Reset failed: ' + ((err && err.message) || String(err));
+      }
+    });
+
+    // ===== MUST-CHANGE PASSWORD =====
+    document.getElementById('setPasswordBtn').addEventListener('click', async function () {
+      const np = document.getElementById('newPassword').value;
+      const cp = document.getElementById('confirmPassword').value;
+      const msgEl = document.getElementById('loginError');
+      msgEl.style.display = 'none';
+      if (np !== cp) { showError('Passwords do not match.'); return; }
+      if (np.length < 8 || !/[A-Z]/.test(np) || !/[a-z]/.test(np) || !/[0-9]/.test(np)) {
+        showError('Password must be at least 8 characters with uppercase, lowercase and a number.');
+        return;
+      }
+      const btn = document.getElementById('setPasswordBtn');
+      btn.disabled = true;
+      try {
+        const res = await window.api.changePassword(pendingUser.id, pendingCurrentPassword, np);
+        if (res.success) {
+          const userData = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+          userData.mustChangePassword = false;
+          sessionStorage.setItem('currentUser', JSON.stringify(userData));
+          window.location.href = 'main.html';
+        } else {
+          showError(res.error || 'Could not update password.');
+          btn.disabled = false;
+        }
+      } catch (err) {
+        showError((err && err.message) || 'Could not update password.');
+        btn.disabled = false;
+      }
+    });
   </script>
 </body>
 </html>

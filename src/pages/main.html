@@ -5,6 +5,50 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'">
   <title>GoldenHope - Member Management System</title>
+  <script>
+    // Renderer error trap: an uncaught error must surface (red banner + log file)
+    // instead of a silent white screen. Loads before every other script.
+    (function () {
+      function log(msg) {
+        try { if (window.api && window.api.logRendererError) window.api.logRendererError(msg); } catch (_) {}
+      }
+      function showBanner(text) {
+        try {
+          var b = document.getElementById('ghErrorBanner');
+          if (!b) {
+            b = document.createElement('div');
+            b.id = 'ghErrorBanner';
+            b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#DC2626;color:#fff;font:12px/1.4 Consolas,monospace;padding:10px 44px 10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.35);white-space:pre-wrap;word-break:break-word;max-height:40vh;overflow:auto;text-align:left;';
+            var close = document.createElement('button');
+            close.textContent = '\u2715';
+            close.style.cssText = 'position:absolute;top:4px;right:6px;background:none;border:none;color:#fff;font-size:16px;cursor:pointer;';
+            close.onclick = function () { b.remove(); };
+            b.appendChild(close);
+            (document.body || document.documentElement).appendChild(b);
+          }
+          var t = document.createElement('div');
+          t.style.marginTop = '4px';
+          t.textContent = text;
+          b.appendChild(t);
+          b.style.display = 'block';
+        } catch (_) {}
+      }
+      window.addEventListener('error', function (e) {
+        var m = (e && e.message) || 'Unknown script error';
+        var src = (e && e.filename) || '';
+        var line = (e && e.lineno) || '';
+        var short = src.replace(/^.*[\\\/]/, '');
+        log('[error] ' + m + ' @ ' + src + ':' + line);
+        showBanner('Script error: ' + m + ' @ ' + short + ':' + line);
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = (e && e.reason) || {};
+        var msg = (r && r.message) ? r.message : String(r && r.stack || r) || 'Unhandled promise rejection';
+        log('[rejection] ' + (r && r.stack || msg));
+        showBanner('Promise error: ' + msg);
+      });
+    })();
+  </script>
   <link rel="stylesheet" href="../css/fonts.css">
   <link rel="stylesheet" href="../css/styles.css">
 </head>

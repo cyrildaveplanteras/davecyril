@@ -16,7 +16,7 @@
  *   - HDA amount: ₱200
  *   - Required MSC for "ready for renewal": ₱100
  *   - Overall payment minimum for Regular members: ₱650
- *   - Sales Coordinator commission: ₱120 flat per qualifying MF (NO ₱100 tier),
+ *   - Sales Coordinator commission: ₱120 for MF = 350, ₱100 for MF = 250,
  *     including the remittance made upon member registration
  *   - MSC coordinator commission: 5% from the 2nd MSC deposit onward (0 on 1st)
  *   - Honorary member: converts to Regular after 10 annual MF payments
@@ -43,10 +43,13 @@
     REQUIRED_MSC: 100,
     OVERALL_PAYMENT_MIN: 650,
 
-    // Commission (₱) — centrally locked; there is NO ₱100 tier.
+    // Commission (₱) — two-tier, centrally locked:
+    //   MF = 350 → ₱120 (SALES_COORDINATOR_COMMISSION / COMAmount)
+    //   MF = 250 → ₱100 (SALES_COORDINATOR_COMMISSION_ALT / COMAmountAlt)
     SALES_COORDINATOR_COMMISSION: 120,
-    MF_THRESHOLD: 350,      // "full" threshold (MF = 350)
-    ALT_THRESHOLD: 250,     // qualifying threshold (MF >= 250 earns commission)
+    SALES_COORDINATOR_COMMISSION_ALT: 100,
+    MF_THRESHOLD: 350,      // "full" threshold (MF = 350 earns ₱120)
+    ALT_THRESHOLD: 250,     // alternate threshold (MF = 250 earns ₱100)
     MSC_COMMISSION_RATE: 0.05,
     MSC_COMMISSION_START_DEPOSIT: 2, // 2nd deposit onward
 
@@ -73,7 +76,7 @@
     return {
       MFThreshold: parseFloat(c.MFThreshold) || RULES.MF_THRESHOLD,
       COMAmount: parseFloat(c.COMAmount) || RULES.SALES_COORDINATOR_COMMISSION,
-      COMAmountAlt: parseFloat(c.COMAmountAlt) || RULES.SALES_COORDINATOR_COMMISSION,
+      COMAmountAlt: parseFloat(c.COMAmountAlt) || RULES.SALES_COORDINATOR_COMMISSION_ALT,
       AltThreshold: parseFloat(c.AltThreshold) || RULES.ALT_THRESHOLD
     };
   }
@@ -83,14 +86,17 @@
   //   paymentPurpose: 'mf' | 'msc' | 'both' | 'hda' | undefined
   //   cfg: optional {MFThreshold, COMAmount, COMAmountAlt, AltThreshold}
   // Returns ₱ commission for the detail row.
+  //
+  // Amount-based and authoritative, two tiers:
+  //   MF >= MFThreshold (350) → COMAmount (₱120)
+  //   AltThreshold (250) <= MF < MFThreshold → COMAmountAlt (₱100)
+  //   any lower MF (or MF = 0, pure MSC-only) → 0
+  // The purpose label is ignored for the amount, so a deposit carrying a
+  // qualifying MF can never be mislabeled to suppress commission.
   function calcCommission(mf, msc, paymentPurpose, cfg) {
     var c = normalizeConfig(cfg);
     var mfNum = parseFloat(mf) || 0;
-    // Amount-based and authoritative: any qualifying MF payment (>= AltThreshold)
-    // earns the flat ₱120 Sales Coordinator commission — at registration, renewal
-    // or any qualifying remittance alike. The purpose label is ignored for the
-    // amount, so a deposit carrying a qualifying MF can never be mislabeled to
-    // suppress commission. Pure MSC-only deposits (MF = 0) earn no commission.
+    if (mfNum >= c.MFThreshold) return c.COMAmount;
     if (mfNum >= c.AltThreshold) return c.COMAmountAlt;
     return 0;
   }

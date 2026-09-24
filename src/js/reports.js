@@ -203,7 +203,7 @@ async function renderReports() {
           <div class="mml-filter-grid">
             <div class="mml-filter-group">
               <label>Month</label>
-              <input type="month" id="rsMonth" class="form-input" value="${new Date().toISOString().slice(0, 7)}">
+              <input type="month" id="rsMonth" class="form-input" value="${fmtLocalMonth()}">
             </div>
             <div class="mml-filter-group">
               <label>Search Member</label>
@@ -1327,7 +1327,7 @@ function renderRFRResult() {
   const user = getCurrentUser();
   const userName = user?.fullName || user?.username || 'Unknown';
   const now = new Date();
-  const genDate = formatDate(now.toISOString());
+  const genDate = formatDate(fmtLocalDate(now));
   const genTime = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   if (!reportData || reportData.length === 0) {
@@ -1586,7 +1586,7 @@ function renderMMLResult() {
   const user = getCurrentUser();
   const userName = user?.fullName || user?.username || 'Unknown';
   const now = new Date();
-  const genDate = formatDate(now.toISOString());
+  const genDate = formatDate(fmtLocalDate(now));
   const genTime = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   if (!reportData || reportData.length === 0) {
@@ -1755,7 +1755,7 @@ function renderDFMResult() {
   const user = getCurrentUser();
   const userName = user?.fullName || user?.username || 'Unknown';
   const now = new Date();
-  const genDate = formatDate(now.toISOString());
+  const genDate = formatDate(fmtLocalDate(now));
   const genTime = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   if (!reportData || reportData.length === 0) {
@@ -1884,7 +1884,7 @@ function printReport() {
     th{background:#F8FAFC;font-weight:600;color:#6B7280}.footer{text-align:center;color:#9CA3AF;margin-top:20px;font-size:11px}
     </style></head><body>
     <h2>${escapeHtml(title)}</h2>${content}
-    <div class="footer">Generated on: ${formatDateTime(new Date().toISOString())}</div>
+    <div class="footer">Generated on: ${formatDateTime(fmtLocalDate())}</div>
     </body></html>`);
   printWin.document.close();
   printWin.print();
@@ -1905,7 +1905,7 @@ function exportReportCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `report_${currentReportType}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `report_${currentReportType}_${fmtLocalDate()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSV exported');
@@ -1955,10 +1955,10 @@ async function exportReportPDF() {
 </div>
 <table><thead><tr>${cols.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>
 <tbody>${rowsHtml}</tbody></table>
-<div class="footer">Generated on: ${formatDateTime(new Date().toISOString())}</div>
+<div class="footer">Generated on: ${formatDateTime(fmtLocalDate())}</div>
 </body></html>`;
 
-    const pdfResult = await window.api.printToPDF(html, `report_${currentReportType}_${new Date().toISOString().slice(0,10)}.pdf`);
+    const pdfResult = await window.api.printToPDF(html, `report_${currentReportType}_${fmtLocalDate()}.pdf`);
     if (!pdfResult.success) { showToast('PDF Export Failed: ' + pdfResult.error, 'error'); return; }
     const blob = new Blob([new Uint8Array(pdfResult.data)], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
@@ -1976,7 +1976,7 @@ async function exportReportExcel() {
   if (!reportData || reportData.length === 0) { showToast('No data to export', 'warning'); return; }
   showLoading();
   try {
-    const result = await window.api.exportExcel(reportData, `report_${currentReportType}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const result = await window.api.exportExcel(reportData, `report_${currentReportType}_${fmtLocalDate()}.xlsx`);
     if (!result.success) { showToast('Excel Export Failed: ' + result.error, 'error'); return; }
     const blob = new Blob([new Uint8Array(result.data)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
@@ -2017,7 +2017,7 @@ function generateMMLHTML(logoUrl) {
   const monthName = MONTHS[parseInt(mmlFilters.month) - 1] || 'Unknown';
   const yearLabel = mmlFilters.year;
   const now = new Date();
-  const genDate = formatDate(now.toISOString());
+  const genDate = formatDate(fmtLocalDate(now));
   const genTime = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
   const user = getCurrentUser();
   const userName = user?.fullName || user?.username || 'Administrator';
@@ -2357,7 +2357,7 @@ async function exportRFRPDF(orientation) {
   try {
     const logo = await getPrintLogo();
     const html = generateRFRHTML(logo, orientation);
-    const filename = `ReadyForRenewal_${new Date().toISOString().slice(0,10)}.pdf`;
+    const filename = `ReadyForRenewal_${fmtLocalDate()}.pdf`;
 
     let pdfResult;
     if (orientation === 'landscape') {
@@ -2425,7 +2425,7 @@ function exportRFRCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ReadyForRenewal_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `ReadyForRenewal_${fmtLocalDate()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSV exported');
@@ -2453,7 +2453,7 @@ async function exportRFRExcel() {
       'Contact Number': m.contact_no || '',
       'Remarks': m.remarks || ''
     }));
-    const result = await window.api.exportExcel(exportData, `ReadyForRenewal_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const result = await window.api.exportExcel(exportData, `ReadyForRenewal_${fmtLocalDate()}.xlsx`);
     if (!result.success) { showToast('Excel Export Failed: ' + result.error, 'error'); return; }
     const blob = new Blob([new Uint8Array(result.data)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
@@ -2469,7 +2469,7 @@ async function exportRFRExcel() {
 
 function generateRFRHTML(logoUrl, orientation) {
   const now = new Date();
-  const genDate = formatDate(now.toISOString());
+  const genDate = formatDate(fmtLocalDate(now));
   const genTime = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
   const user = getCurrentUser();
   const userName = user?.fullName || user?.username || 'Administrator';
@@ -2613,7 +2613,7 @@ async function exportDFMPDF(orientation) {
   try {
     const logo = await getPrintLogo();
     const html = generateDFMHTML(logo, orientation);
-    const filename = `DueForMSC_${new Date().toISOString().slice(0,10)}.pdf`;
+    const filename = `DueForMSC_${fmtLocalDate()}.pdf`;
 
     let pdfResult;
     if (orientation === 'landscape') {
@@ -2677,7 +2677,7 @@ function exportDFMCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `DueForMSC_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `DueForMSC_${fmtLocalDate()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSV exported');
@@ -2701,7 +2701,7 @@ async function exportDFMExcel() {
       'Contact Number': m.contact_no || '',
       'Remarks': m.remarks || ''
     }));
-    const result = await window.api.exportExcel(exportData, `DueForMSC_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const result = await window.api.exportExcel(exportData, `DueForMSC_${fmtLocalDate()}.xlsx`);
     if (!result.success) { showToast('Excel Export Failed: ' + result.error, 'error'); return; }
     const blob = new Blob([new Uint8Array(result.data)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
@@ -2717,7 +2717,7 @@ async function exportDFMExcel() {
 
 function generateDFMHTML(logoUrl, orientation) {
   const now = new Date();
-  const genDate = formatDate(now.toISOString());
+  const genDate = formatDate(fmtLocalDate(now));
   const genTime = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
   const user = getCurrentUser();
   const userName = user?.fullName || user?.username || 'Administrator';

@@ -31,7 +31,27 @@ function getRenewalStatus(days, mfPaymentCount) {
   return { cls: 'success', label: `${days} days left` };
 }
 
+// Error-proof shell: if anything below throws, show the actual error instead of
+// a white screen (and log it to %LOCALAPPDATA%\GoldenHope\renderer-errors.log).
 async function renderDashboard() {
+  try {
+    renderDashboardImpl();
+  } catch (err) {
+    const area = document.getElementById('contentArea');
+    const message = ((err && err.stack) || (err && err.message) || String(err)).replace(/</g, '&lt;');
+    if (window.api && window.api.logRendererError) window.api.logRendererError('dashboard render: ' + message);
+    if (area) {
+      area.innerHTML =
+        '<div style="margin:40px auto;max-width:640px;text-align:center;font-family:inherit">' +
+        '<h3 style="color:#DC2626;margin-bottom:12px">Dashboard could not be loaded</h3>' +
+        '<pre style="background:#1e1e2e;color:#f8f8f2;padding:16px;border-radius:8px;font:12px/1.5 Consolas,monospace;text-align:left;overflow:auto;max-height:220px">' + message + '</pre>' +
+        '<p style="color:#555;font-size:13px">This error was also saved to renderer-errors.log in your GoldenHope app data folder.</p>' +
+        '<button class="btn btn-primary" onclick="renderDashboard()">Retry</button></div>';
+    }
+  }
+}
+
+async function renderDashboardImpl() {
   const area = document.getElementById('contentArea');
 
   const user = getCurrentUser();
@@ -807,7 +827,7 @@ function generateRCSInsights(data) {
   }
 
   if (dailyTrend && dailyTrend.length > 0 && targetAmount > 0) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = fmtLocalDate();
     const todayData = dailyTrend.find(d => d.date === today);
     if (todayData && todayData.amount > 0) {
       const dailyTarget = targetAmount / new Date().getDate();

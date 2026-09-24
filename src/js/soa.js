@@ -215,7 +215,7 @@ async function loadSOAData(memberId) {
   }
 
   const now = new Date();
-  document.getElementById('soaGenDate').textContent = formatDateTime(now.toISOString());
+  document.getElementById('soaGenDate').textContent = formatDateTime(fmtLocalDate(now));
 
   const searchInput = document.getElementById('soaSearchInput');
   searchInput.removeEventListener('input', soaSearchHandler);
@@ -397,7 +397,7 @@ async function printStatement() {
 
   const user = getCurrentUser();
   const now = new Date();
-  const genDateTime = formatDateTime(now.toISOString());
+  const genDateTime = formatDateTime(fmtLocalDate(now));
   const printedBy = user ? user.fullName || user.username : 'Unknown';
 
   const member = currentSOAMember;
@@ -515,9 +515,9 @@ async function exportSOAPDF() {
   const deathStats = currentSOADeathStats;
   const user = getCurrentUser();
   const now = new Date();
-  const genDateTime = formatDateTime(now.toISOString());
+  const genDateTime = formatDateTime(fmtLocalDate(now));
   const printedBy = user ? user.fullName || user.username : 'Unknown';
-  const filename = `SOA_${String(member.af_no || '').replace(/[\\/:*?"<>|]/g, '')}_${member.full_name ? member.full_name.replace(/\s+/g, '').replace(/[\\/:*?"<>|]/g, '') : 'Unknown'}_${now.toISOString().slice(0, 10)}.pdf`;
+  const filename = `SOA_${String(member.af_no || '').replace(/[\\/:*?"<>|]/g, '')}_${member.full_name ? member.full_name.replace(/\s+/g, '').replace(/[\\/:*?"<>|]/g, '') : 'Unknown'}_${fmtLocalDate(now)}.pdf`;
 
   try {
     const result = await window.api.getSOATransactions(member.Id, { page: 1, pageSize: 500 });

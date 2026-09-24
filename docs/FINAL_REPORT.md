@@ -53,7 +53,7 @@ The backup was converted from MySQL mysqldump format to PostgreSQL via `scripts/
 | members | 956 | From MariaDB backup |
 | remittances | 28 | Parent slips, `TotalDeposit` recomputed from detail sums |
 | remittance_details | 966 | MemberId backfilled for orphaned rows |
-| commission_transactions | 965 | Flat ₱120 per qualifying MF remittance |
+| commission_transactions | 965 | 5% MSC commission (2nd deposit onward) |
 | sales_coordinators | 17 | — |
 | damayan_deductions | 1,292 | — |
 | death_cases | 12 | — |
@@ -68,6 +68,8 @@ The backup was converted from MySQL mysqldump format to PostgreSQL via `scripts/
 
 Commission normalization applied: 208 Honorary bulk rows corrected (MF≥250, COM=0 → COM=120). All remittance totals recomputed.
 
+> **Update 2026-09-18 (two-tier commission).** Sales Coordinator commission is now **₱120 for MF=350 and ₱100 for MF=250**. `scripts/reconcile.js --apply` corrected **1,129 MF=250 rows from COM=120 → COM=100** (NetDeposit +₱20 each), left the 25 MF=350/₱120 and 81 MF=0/₱0 rows intact, normalized `commission_config` to the canonical (COMAmount 120, COMAmountAlt 100) row, and recomputed 41 remittance `TotalDeposit` values (0 mismatches).
+
 Reconciliation totals checked in `scripts/test-db-consistency.js` (10/10 PASS) and
 `scripts/test-financial-scenarios.js` (11/11 PASS).
 
@@ -78,9 +80,9 @@ Reconciliation totals checked in `scripts/test-db-consistency.js` (10/10 PASS) a
 | Rule | Implementation | Result |
 |------|----------------|--------|
 | Membership fee ₱250 / ₱350 tiers | `src/js/business-rules.js` | 19/19 unit tests PASS |
-| Sales Coordinator commission flat ₱120 (no ₱100 tier) | Amount-based `calcCommission`; backend authoritative | PASS |
+| Sales Coordinator commission two-tier (₱120 for MF=350 / ₱100 for MF=250) | Tiered amount-based `calcCommission`; backend authoritative | PASS |
 | MSC commission: 0% 1st deposit, 5% 2nd onward | `MSC_COMMISSION_RATE` logic | Verified for 1st/2nd/3rd deposits in financial scenarios |
-| Registration remittance earns flat ₱120 commission | `autoAddMemberToSlip` uses purpose `both`; repair script restored 209 first-deposit rows | PASS |
+| Registration remittance earns tiered commission (₱120 MF=350 / ₱100 MF=250) | `autoAddMemberToSlip` uses purpose `both`; repair script restored 209 first-deposit rows | PASS |
 | HDA ₱200 | `hdaDeduction:bulk` + `processHDADeduction` | PASS |
 | Remittance posting is atomic | Single transaction (validate → MF → MSC → commission → records → funds → statements → balances → COMMIT/ROLLBACK) | Verified rollback leaves no partial rows |
 | Member balances from verified transactions only | SOA recomputed from details | PASS (SOA probe ok, computed_balance correct) |
