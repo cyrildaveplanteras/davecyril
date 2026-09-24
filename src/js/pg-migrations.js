@@ -56,24 +56,22 @@ async function cleanupDraftRemittances(pool) {
 }
 
 async function fixCommissionValues(pool) {
+  // Two-tier Sales Coordinator commission (amount-based, authoritative):
+  //   MF = 350 → COM 120 ; MF = 250 → COM 100 ; no other MF earns commission.
+  // Normalize any stored value that drifted from the rule (legacy flat-120 on
+  // MF=250 rows, legacy ₱100/₱140 on MF=350 rows, and bypassed COM=0 rows).
   const [preRemits] = await pool.execute(
     `SELECT DISTINCT "RemittanceId" FROM remittance_details
-     WHERE ("MF" >= 250 AND "COM" IN (100.00, 140.00))
-        OR ("MF" >= 250 AND ("COM" IS NULL OR "COM" = 0))`
+     WHERE ("MF" >= 350 AND ("COM" IS NULL OR "COM" <> 120.00))
+        OR ("MF" >= 250 AND "MF" < 350 AND ("COM" IS NULL OR "COM" <> 100.00))`
   );
-  const [fix100] = await pool.execute(
-    'UPDATE remittance_details SET "COM" = 120.00, "NetDeposit" = "Total" - 120.00 WHERE "MF" >= 250 AND "COM" = 100.00'
+  const [fixFull] = await pool.execute(
+    'UPDATE remittance_details SET "COM" = 120.00, "NetDeposit" = "Total" - 120.00 WHERE "MF" >= 350 AND ("COM" IS NULL OR "COM" <> 120.00)'
   );
-  const [fix140] = await pool.execute(
-    'UPDATE remittance_details SET "COM" = 120.00, "NetDeposit" = "Total" - 120.00 WHERE "MF" >= 250 AND "COM" = 140.00'
+  const [fixAlt] = await pool.execute(
+    'UPDATE remittance_details SET "COM" = 100.00, "NetDeposit" = "Total" - 100.00 WHERE "MF" >= 250 AND "MF" < 350 AND ("COM" IS NULL OR "COM" <> 100.00)'
   );
-  // Bulk/Honorary processing in the legacy MySQL app recorded MF >= 250 rows with
-  // COM = 0 (commission bypassed). The central rule awards the flat P120 for any
-  // qualifying MF, so normalize those too.
-  const [fixZero] = await pool.execute(
-    'UPDATE remittance_details SET "COM" = 120.00, "NetDeposit" = "Total" - 120.00 WHERE "MF" >= 250 AND "Total" >= 120 AND ("COM" IS NULL OR "COM" = 0)'
-  );
-  const totalFixed = (fix100.affectedRows || 0) + (fix140.affectedRows || 0) + (fixZero.affectedRows || 0);
+  const totalFixed = (fixFull.affectedRows || 0) + (fixAlt.affectedRows || 0);
   const recomputed = [];
   for (const r of preRemits) {
     await pool.execute(
@@ -83,11 +81,11 @@ async function fixCommissionValues(pool) {
     recomputed.push(r.RemittanceId);
   }
   if (totalFixed > 0 || recomputed.length > 0) {
-    console.log(`Migration: Corrected ${totalFixed} commission record(s) from ₱100/₱140 to ₱120; recomputed TotalDeposit for ${recomputed.length} remittance(s)`);
+    console.log(`Migration: Corrected ${totalFixed} commission record(s) to the two-tier rule (₱120 for MF=350, ₱100 for MF=250); recomputed TotalDeposit for ${recomputed.length} remittance(s)`);
     try {
       await pool.execute(
         "INSERT INTO audit_logs (\"AdminUserId\", \"Action\", \"Description\", \"CreatedAt\") VALUES (NULL, 'Commission Correction', ?, now())",
-        [`Historical Sales Coordinator commission corrected from ₱100 to ₱120 on ${totalFixed} remittance detail(s); TotalDeposit recomputed for ${recomputed.length} remittance(s).`]
+        [`Historical Sales Coordinator commission normalized to two-tier rule (₱120 for MF=350, ₱100 for MF=250) on ${totalFixed} remittance detail(s); TotalDeposit recomputed for ${recomputed.length} remittance(s).`]
       );
     } catch (_) {}
   }

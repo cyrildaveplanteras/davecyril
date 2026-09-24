@@ -4,9 +4,10 @@ let editingRemittanceId = null;
 let remittanceRowCounter = 0;
 let commissionConfig = null;
 
-// Central Sales Coordinator commission: exactly ₱120 per qualifying transaction.
-// Single source of truth: src/js/business-rules.js (mirrors main.js).
-const RULES = (typeof window !== 'undefined' && window.BusinessRules) ? window.BusinessRules : { RULES: { SALES_COORDINATOR_COMMISSION: 120, MF_THRESHOLD: 350, ALT_THRESHOLD: 250, MSC_MINIMUM: 300 }, calcCommission: (mf, msc, purpose, cfg) => { const c = cfg || { MFThreshold: 350, COMAmount: 120, COMAmountAlt: 120, AltThreshold: 250 }; if ((parseFloat(mf) || 0) >= c.AltThreshold) return 120; return 0; }, normalizeConfig: (c) => c };
+// Central Sales Coordinator commission: ₱120 for MF=350, ₱100 for MF=250 per
+// qualifying transaction. Single source of truth: src/js/business-rules.js
+// (mirrors main.js). Fallback below only applies if the shared module fails.
+const RULES = (typeof window !== 'undefined' && window.BusinessRules) ? window.BusinessRules : { RULES: { SALES_COORDINATOR_COMMISSION: 120, SALES_COORDINATOR_COMMISSION_ALT: 100, MF_THRESHOLD: 350, ALT_THRESHOLD: 250, MSC_MINIMUM: 300 }, calcCommission: (mf, msc, purpose, cfg) => { const c = cfg || { MFThreshold: 350, COMAmount: 120, COMAmountAlt: 100, AltThreshold: 250 }; const mfNum = parseFloat(mf) || 0; if (mfNum >= c.MFThreshold) return c.COMAmount; if (mfNum >= c.AltThreshold) return c.COMAmountAlt; return 0; }, normalizeConfig: (c) => c };
 const SALES_COORDINATOR_COMMISSION = RULES.RULES.SALES_COORDINATOR_COMMISSION;
 const MSC_MINIMUM = RULES.RULES.MSC_MINIMUM;
 
@@ -162,7 +163,7 @@ remittanceRowCounter = 0;
         </div>
       </div>`;
 
-    document.getElementById('rDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('rDate').value = fmtLocalDate();
     const rhSearch = document.getElementById('rhSearch');
     if (rhSearch) {
       rhSearch.addEventListener('keydown', function(e) {
@@ -198,8 +199,9 @@ async function autoAddMemberToSlip(memberId) {
   const mf = parseFloat(m.membership_fee) || 0;
   const msc = MSC_MINIMUM;
   // Registration remittance: the member's membership fee (MF) qualifies for the
-  // flat ₱120 Sales Coordinator commission, exactly like a renewal. Only when
-  // the member has no qualifying MF is this an MSC-only deposit (COM = 0).
+  // Sales Coordinator commission (two-tier: ₱120 for MF=350, ₱100 for MF=250),
+  // exactly like a renewal. Only when the member has no qualifying MF is this
+  // an MSC-only deposit (COM = 0).
   const paymentPurpose = mf >= RULES.RULES.ALT_THRESHOLD ? 'both' : 'msc';
   const com = calcCOM(mf, msc, cfg, paymentPurpose);
   remittanceRowCounter++;
@@ -686,7 +688,7 @@ async function saveRemittanceSlip() {
 
     showLoading();
     const now = new Date();
-    const currentDateDeposit = now.toISOString().slice(0, 10);
+    const currentDateDeposit = fmtLocalDate(now);
     try {
       const result = await window.api.saveRemittance(
         { Id: editingRemittanceId, DateDeposit: date || currentDateDeposit, TotalDeposit: totals.deposit, BranchId: parseInt(branchId), PreparedBy: preparedBy, PreparedById: parseInt(preparedById), VerifiedBy: verifiedBy, VerifiedById: verifiedById ? parseInt(verifiedById) : null, Status: 'Completed' },
@@ -725,7 +727,7 @@ function clearRemittanceForm() {
   const noEl = document.getElementById('rNo');
   if (noEl) noEl.value = '';
   const dateEl = document.getElementById('rDate');
-  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+  if (dateEl) dateEl.value = fmtLocalDate();
   const branchEl = document.getElementById('rBranch');
   if (branchEl) branchEl.value = '';
   const prepEl = document.getElementById('rPreparedBy');

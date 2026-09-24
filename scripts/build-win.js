@@ -6,6 +6,15 @@
 // variables come from the workflow environment instead.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env.local') });
 
+// Deliberately NOT code-signing: the only local certificate is a self-signed,
+// untrusted one (SmartScreen still warns, and the private key has been inside
+// earlier shipped installers). Clear any CSR-related env vars so electron-builder
+// always produces an unsigned binary.
+delete process.env.CSC_LINK;
+delete process.env.CSC_KEY_PASSWORD;
+delete process.env.WIN_CSC_LINK;
+delete process.env.WIN_CSC_KEY_PASSWORD;
+
 const { execSync } = require('child_process');
 const path = require('path');
 

@@ -44,6 +44,22 @@ function hideLoading() {
   document.getElementById('loadingOverlay')?.classList.add('hidden');
 }
 
+// ===== LOCAL DATE FORMATTING (timezone-safe) =====
+// Using toISOString().slice(0,10) converts to UTC first. In the Philippine
+// timezone (+08:00) local midnight becomes the *previous* day in UTC, so
+// dates silently drift backwards between midnight and 08:00 PHT.
+// These helpers format using LOCAL calendar components to avoid that bug.
+function fmtLocalDate(d) {
+  if (!d) d = new Date();
+  if (typeof d === 'string') d = new Date(d);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function fmtLocalMonth(d) {
+  if (!d) d = new Date();
+  if (typeof d === 'string') d = new Date(d);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
 // ===== FORMAT HELPERS =====
 function formatCurrency(amount) {
   return '₱' + parseFloat(amount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');

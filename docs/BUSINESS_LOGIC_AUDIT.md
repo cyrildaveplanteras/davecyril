@@ -8,6 +8,8 @@
 
 > **Update 2026-08-14 (Phase 2.1 — Registration Remittance Commission).** Per directive: **the remittance made upon member registration also earns the flat ₱120 Sales Coordinator commission** — the same amount-based rule as renewals; there is no ₱100 tier anywhere, and the backend is authoritative (it recomputes commission from amounts and rejects any attempt to store ₱100/₱140). Implementation: `src/js/business-rules.js` `calcCommission` is now **amount-based** — a qualifying MF (≥ 250) earns ₱120 regardless of the purpose label; only genuine MSC-only deposits (MF = 0) earn 0. `autoAddMemberToSlip` (`src/js/remittance.js`) now uses purpose `'both'` when the member has a qualifying membership fee, so a newly registered member's first slip earns ₱120 instead of being forced to `'msc'` (which returned 0). Historical repair applied via `scripts/repair-registration-commission.js` (`--apply`): **209 first-deposit registration remittance rows** (Honorary members with membership fee ≥ 250) were restored — MF = `membership_fee`, COM = ₱120, Total/NetDeposit recomputed, parent `TotalDeposit` updated (3 remittances); 67 genuine MSC-only later deposits were left untouched. `commission_config` was also deduped to the single canonical ₱120 row (a stale ₱100 duplicate created by legacy code was deleted; the startup migration and `reconcile.js` now keep only the canonical row). Reconcile classification updated so qualifying rows always earn 120 and are never MF-zeroed. Tests extended (business-rules 19/19, db-consistency 10/10 pass). Released as **v1.4.0**.
 
+> **Update 2026-09-18 (Phase 2.2 — Two-Tier Commission).** Per new directive, the Sales Coordinator commission is **two-tier**: **MF = 350 → ₱120, MF = 250 → ₱100** (reversing the flat-₱120 / no-₱100 rule). `src/js/business-rules.js` `calcCommission` is now tiered but stays amount-based and authoritative; `commission:saveConfig` accepts only COMAmount = 120 + COMAmountAlt = 100; the boot migration (`fixCommissionValues`) now normalizes drifted rows to their tier instead of flattening everything to ₱120. Historical data revised retroactively via `scripts/reconcile.js --apply`: **1,129 MF=250 rows corrected from COM=120 → ₱100** (NetDeposit +₱20 each), while 25 MF=350/₱120 and 81 MF=0/₱0 rows were left intact; `commission_config` canonical row = (COMAmount 120, COMAmountAlt 100) and 41 remittance `TotalDeposit` values were recomputed (0 mismatches remaining). `test-business-rules.js` (20/20) and `test-db-consistency.js` (10/10) updated to the tier rule and passing.
+
 ---
 
 ## 0. Architecture Overview
@@ -85,7 +87,7 @@
 |---|---|---|---|---|---|
 | 4.1 | Initial renewal | main.js 1882 | reg + 1 year | Pass | — |
 | 4.2 | Qualifying trigger | main.js 2455–2461 | Completed remittance with MF ∈ {250,350} → `handleMemberRenewal` once/member/save | Pass | — |
-| 4.3 | Extension rule | main.js 5122–5151 | NULL/overdue → today+1y; on-time → preserves anniversary (+1y); sets last_renewed=CURDATE, Active, renewal_success | Pass | document "reset on overdue" |
+| 4.3 | Extension rule | main.js 4728–4748 | NULL/overdue → **next future registration-month anniversary** (`nextFutureRenewalAnniversary`, main.js 4363: keeps the registered month, never resets to the payment date); on-time → preserves anniversary (+1y); sets last_renewed=CURDATE, Active, renewal_success | **Fixed** | backfilled 532 drifted renewal_date rows via scripts/fix-renewal-month.js |
 | 4.4 | Initial MF guard | main.js 5083–5093 | First MF within 90 days of registration does NOT extend term | Pass | make window configurable |
 | 4.5 | Due bands | main.js 4844–4928 | 30–16d upcoming_30; 15–8d; 7–1d; due_today; −1..−15 grace (stays Active); **<−15 → member_status='Inactive'** | Pass | runs only on check (startup+6h), not DB scheduler |
 | 4.6 | Honorary→Regular | main.js 5095–5120 | +1 per annual MF; at ≥10 auto-convert + audit + upgrade notification | Pass | document; audit trail |
@@ -99,7 +101,7 @@
 
 | # | Feature | Rule | Status | Recommended fix |
 |---|---|---|---|---|
-| 5.1 | COM calc | `calcCOM`/`calcComServer`: **amount-based** — MF≥250 → **₱120** (registration remittance included), MSC-only (MF=0) → 0; no ₱100/₱140 tier | Pass | **centralized in `src/js/business-rules.js`; backend authoritative (2026-08-14)** |
+| 5.1 | COM calc | `calcCOM`/`calcComServer`: **amount-based, two-tier** — MF=350 → **₱120**, MF=250 → **₱100** (registration remittance included), MSC-only (MF=0) → 0; no other COM values | Pass | **centralized in `src/js/business-rules.js`; backend authoritative (2026-09-18)** |
 | 5.2 | Row totals | Total=MF+MSC+HDA; NetDeposit=Total−COM; TotalDeposit=Σ Net (server recomputes, ignores renderer) | Pass | — |
 | 5.3 | Payment types | msc: MSC≥300; mf: MF≥250 (default 350); both; hda: HDA=200 fixed | **Fixed** | amounts now sourced from `business-rules.js` |
 | 5.4 | MSC commission | 5% of MSC from 2nd MSC deposit onward; 0 on 1st; only Completed | Pass | **centralized `calcMscCommission`** |
@@ -211,7 +213,7 @@
 |---|---|---|---|
 | 13.1 | Age | members.js 398 | `floor((now−birth)/365.25)`, clamp ≥0 |
 | 13.2 | OverallPayment | members.js 1249 | `MF + MSC` (readonly) |
-| 13.3 | renewal_date | main.js 1882 / 5122 | `reg + 1y`; overdue → `today + 1y` |
+| 13.3 | renewal_date | main.js 1882 / 4728 | `reg + 1y`; overdue/NULL → next future registration-month anniversary (never resets to payment date) |
 | 13.4 | COM | main.js 2367 | tiered flat: 350→120, 250→100, else 0; msc-only→0 |
 | 13.5 | Total | main.js 2415 | `MF+MSC+HDA` |
 | 13.6 | NetDeposit | main.js 2417 | `Total − COM` |

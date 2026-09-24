@@ -99,7 +99,7 @@ async function renderMemberRegistration(member = null) {
       showToast(err.message || 'Failed to generate AF number', 'error');
       afNo = '00001';
     }
-    regDate = new Date().toISOString().slice(0, 10);
+    regDate = fmtLocalDate();
   }
 
   const membershipStatus = isEditing ? (member.MembershipStatus || member.membership_status || 'Regular') : 'Regular';
@@ -348,7 +348,7 @@ function onMembershipStatusChange() {
         membershipStatus: 'Honorary',
         yearsCompleted: 0,
         yearsRequired: 10,
-        startDate: document.getElementById('mRegDate').value || new Date().toISOString().slice(0, 10),
+        startDate: document.getElementById('mRegDate').value || fmtLocalDate(),
         remainingYears: 10
       });
     } else if (status === 'Regular') {

@@ -438,7 +438,7 @@ async function processDeathCase(memberId) {
     `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
      <button class="btn btn-danger" onclick="confirmDeathCase(${memberId})">Process</button>`
   );
-  document.getElementById('dcDate').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('dcDate').value = fmtLocalDate();
   if (m.registration_date) updateDeathBenefitDisplay(m.registration_date, m.membership_status);
 }
 
@@ -532,7 +532,7 @@ async function exportMemberListCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `members_export_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `members_export_${fmtLocalDate()}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -546,7 +546,7 @@ function viewSOAFromList(memberId) {
 
 function openBulkDeduction() {
   const now = new Date();
-  const defaultMonth = now.toISOString().slice(0, 7);
+  const defaultMonth = fmtLocalMonth(now);
   showModal('Bulk Damayan Deduction',
     `<div class="form-grid">
       <div class="form-group">
@@ -734,7 +734,7 @@ function confirmMonthLock() {
   const now = new Date();
   const defaultStart = new Date(now.getTime() + 3600000); // 1 hour from now
   const defaultEnd = new Date(now.getTime() + 3 * 86400000); // 3 days from now
-  const fmtDate = (d) => d.toISOString().slice(0, 10);
+  const fmtDate = (d) => fmtLocalDate(d);
   const fmtTime = (d) => String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   showModal('Configure System Lock',
     `<div class="form-grid" style="grid-template-columns:1fr 1fr">

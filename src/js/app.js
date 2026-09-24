@@ -89,7 +89,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  navigateTo('dashboard');
+  try {
+    navigateTo('dashboard');
+  } catch (err) {
+    try { if (window.api && window.api.logRendererError) window.api.logRendererError('app boot: ' + ((err && err.stack) || (err && err.message) || String(err))); } catch (_) {}
+    const area = document.getElementById('contentArea');
+    if (area) {
+      area.innerHTML = '<div style="padding:40px;text-align:center;color:#DC2626">The app did not finish loading. See renderer-errors.log for details.</div>';
+    }
+  }
   startClock();
 });
 

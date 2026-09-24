@@ -68,6 +68,21 @@ const { ensurePostgresRunning, cleanupPostgres } = require('./src/js/auto-postgr
 const BusinessRules = require('./src/js/business-rules');
 const { runMigrations } = require('./src/js/pg-migrations');
 
+// Local-date formatting helpers (timezone-safe). Using toISOString() converts
+// to UTC; in the Philippine timezone (+08:00) local midnight becomes the
+// *previous* day in UTC so dates silently drift between midnight and 08:00 PHT.
+// These use local calendar components to avoid that bug.
+function fmtLocal(d) {
+  if (!d) d = new Date();
+  if (typeof d === 'string') d = new Date(d);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function fmtLocalMonth(d) {
+  if (!d) d = new Date();
+  if (typeof d === 'string') d = new Date(d);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.allowPrerelease = false;
@@ -79,10 +94,32 @@ if (!app.isPackaged) autoUpdater.logger = console;
 const UPDATER_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // every 4 hours
 
 // Single-instance lock: prevent multiple app instances from running at once
-// (they could otherwise contend over the same MySQL schema migrations and IPC).
+// (they could otherwise contend over the same schema migrations and IPC).
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  app.quit();
+  // Never fail silently: tell the user another GoldenHope window exists instead
+  // of just quitting with a blank/double launch.
+  try {
+    require('fs').appendFileSync(
+      path.join(app.getPath('userData'), 'renderer-errors.log'),
+      `[${new Date().toISOString()}] [second-instance] GoldenHope is already running; the new instance was closed. The existing window has been focused.\n`
+    );
+  } catch (_) {}
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+  app.whenReady().then(() => {
+    const { dialog } = require('electron');
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'GoldenHope already running',
+      message: 'GoldenHope is already open.',
+      detail: 'Use the window that is already open. If it does not appear, close it from the taskbar and relaunch.'
+    }).then(() => app.quit()).catch(() => app.quit());
+  });
 } else {
   app.on('second-instance', () => {
     if (mainWindow) {
@@ -559,8 +596,10 @@ const WINDOW_MS = 10 * 60 * 1000;
 const REQUIRED_MSC = BusinessRules.RULES.REQUIRED_MSC;
 
 // Central Sales Coordinator commission deducted from every qualifying remittance.
-// Approved business rule: exactly ₱120 per applicable transaction. Do not change.
+// Approved business rule (two-tier): exactly ₱120 for MF = 350 and ₱100 for MF = 250.
+// Do not change.
 const SALES_COORDINATOR_COMMISSION = BusinessRules.RULES.SALES_COORDINATOR_COMMISSION;
+const SALES_COORDINATOR_COMMISSION_ALT = BusinessRules.RULES.SALES_COORDINATOR_COMMISSION_ALT;
 
 function getLoginKey(username) {
   return String(username || '').toLowerCase().trim();
@@ -653,6 +692,13 @@ function checkIpcRateLimit(event, handlerName, maxRequests = 60, windowMs = 6000
   return { allowed: true, remaining: maxRequests - record.count };
 }
 
+// Clear the rate-limit record for a successful call (e.g. a successful login
+// must not consume the same IPC quota as failed attempts).
+function resetIpcRateLimit(event, handlerName) {
+  const key = `${event?.sender?.id || 'unknown'}:${handlerName}`;
+  ipcRateLimits.delete(key);
+}
+
 // ===== AUTH SESSION STORE =====
 // Authenticated sessions live in the main process, keyed by webContents id, so a
 // renderer cannot forge its own identity. User id/role are derived from here.
@@ -696,7 +742,7 @@ ipcMain.handle('auth:login', async (event, { username, password }) => {
     const pool = db.getPool();
     const key = getLoginKey(username);
     if (await isLoginLocked(key)) {
-      return { success: false, error: 'Too many failed attempts. Please try again in a few minutes.' };
+      return { success: false, error: 'Too many failed attempts. Please try again in a few minutes.', accountLocked: true };
     }
     const [users] = await pool.execute('SELECT * FROM users WHERE Username = ? AND IsActive = 1 AND IsLocked = 0', [username]);
     if (users.length === 0) {
@@ -707,7 +753,7 @@ ipcMain.handle('auth:login', async (event, { username, password }) => {
           [`Login attempt for user '${username}' failed: account not found or inactive.`]
         );
       } catch (_) {}
-      return { success: false, error: 'Invalid username or password' };
+      return { success: false, error: 'Invalid username or password.' };
     }
     const user = users[0];
     let valid = false;
@@ -722,9 +768,10 @@ ipcMain.handle('auth:login', async (event, { username, password }) => {
           [`Login attempt for user '${username}' failed: invalid password.`]
         );
       } catch (_) {}
-      return { success: false, error: 'Invalid username or password' };
+      return { success: false, error: 'Invalid username or password.' };
     }
     await clearLoginFailures(key);
+    resetIpcRateLimit(event, 'auth:login');
     await pool.execute('UPDATE users SET LastLogin = NOW() WHERE Id = ?', [user.Id]);
 
     // Audit login (server-side, identity derived from DB row, not renderer payload)
@@ -745,13 +792,40 @@ ipcMain.handle('auth:login', async (event, { username, password }) => {
         username: user.Username,
         fullName: user.FullName,
         role: user.Role,
-        profilePicture: user.ProfilePicture
+        profilePicture: user.ProfilePicture,
+        mustChangePassword: user.MustChangePassword === 1 || user.MustChangePassword === true
       }
     };
   } catch (error) {
-    return { success: false, error: maskSqlError(error) };
+    return classifyLoginError(error);
   }
 });
+
+// Convert a login-time exception into a user-actionable message so the UI never
+// has to guess between "wrong password", "database down", and "account locked".
+function classifyLoginError(error) {
+  const code = (error && (error.code || error.sqlState)) || '';
+  const msg = (error && (error.sqlMessage || error.message)) || '';
+  const haystack = `${code} ${msg}`;
+  // PostgreSQL server / TCP not reachable (service down, wrong port, wrong paths)
+  if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|P1001|CONNECTION_TIMED_OUT|socket hang up|connection refused|connect econnrefused/i.test(haystack)) {
+    return {
+      success: false,
+      dbNotReady: true,
+      error: 'Cannot connect to the database. PostgreSQL is not reachable on port 5433. Start the PostgreSQL 17 service, then try again.'
+    };
+  }
+  // Access denied / database missing -> credentials or provisioning wrong
+  if (code === 'ER_ACCESS_DENIED_ERROR' || code === 'ER_BAD_DB_ERROR' || /28P01|3D000|password authentication failed|role .* does not exist|database .* does not exist/i.test(haystack)) {
+    return {
+      success: false,
+      dbMisconfigured: true,
+      error: 'Database connection rejected. Check the database password in %LOCALAPPDATA%\\GoldenHope\\db-config.json matches your PostgreSQL install.'
+    };
+  }
+  // Migration / schema problems surface as a real message so they can be diagnosed
+  return { success: false, error: maskSqlError(error) };
+}
 
 ipcMain.handle('auth:logout', (event) => {
   if (event && event.sender) sessions.delete(event.sender.id);
@@ -1133,7 +1207,7 @@ ipcMain.handle('members:save', async (event, { member }) => {
           if (regDateStr && regDateStr !== oldRegDateStr) {
             const d = new Date(regDateStr);
             d.setFullYear(d.getFullYear() + 1);
-            renewalDate = d.toISOString().slice(0, 10);
+            renewalDate = fmtLocal(d);
           } else {
             renewalDate = oldRenewalDate;
           }
@@ -1172,7 +1246,7 @@ ipcMain.handle('members:save', async (event, { member }) => {
         broadcastDataChanged();
         return { success: true, id: member.Id };
       } else {
-        const regDate = member.RegistrationDate || new Date().toISOString().slice(0, 10);
+        const regDate = member.RegistrationDate || fmtLocal();
 
         // Compute renewal date in JS (registration + 1 year) and pass it as a
         // plain value. Using `? + INTERVAL '1 year'` with a *parameter* makes
@@ -1678,8 +1752,7 @@ async function getCommissionConfigSql(conn) {
 }
 
 // Server-side mirror of the renderer's calcCOM, so stored totals cannot be forged.
-// Commission is centrally locked to SALES_COORDINATOR_COMMISSION (₱120) for every
-// qualifying transaction (MF >= AltThreshold). There is no ₱100 tier.
+// Commission rule (two-tier, amount-based): MF = 350 → ₱120, MF = 250 → ₱100.
 // Delegates to the shared business-rules module so server and client can never diverge.
 function calcComServer(mf, msc, paymentPurpose, cfg) {
   return BusinessRules.calcCommission(mf, msc, paymentPurpose, cfg);
@@ -2078,7 +2151,7 @@ ipcMain.handle('remittances:dashboard-summary', async (event, { period, startDat
         transactionCount: parseInt(aggRows[0].transactionCount) || 0,
         avgTransaction: parseFloat(aggRows[0].avgTransaction) || 0,
         dailyTrend: trendRows.map(r => ({
-          date: r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10),
+          date: r.date instanceof Date ? fmtLocal(r.date) : String(r.date).slice(0, 10),
           transactions: parseInt(r.transactions) || 0,
           amount: parseFloat(r.amount) || 0
         })),
@@ -3939,11 +4012,11 @@ ipcMain.handle('commission:saveConfig', async (event, config) => {
     if (mfAmount < 0 || comAmount < 0 || comAmountAlt < 0 || mfThreshold < 0 || altThreshold < 0) {
       return { success: false, error: 'Commission values cannot be negative' };
     }
-    // Approved business rule: the Sales Coordinator commission is strictly ₱120.
-    // Reject any attempt to save a different commission (e.g. ₱100) so the value
-    // can never drift from the central constant.
-    if (comAmount !== SALES_COORDINATOR_COMMISSION || comAmountAlt !== SALES_COORDINATOR_COMMISSION) {
-      return { success: false, error: `Commission must be ₱${SALES_COORDINATOR_COMMISSION} per approved business rule.` };
+    // Approved business rule (two-tier): the Sales Coordinator commission is ₱120
+    // for MF = 350 and ₱100 for MF = 250. Reject any attempt to save a different
+    // commission so the values can never drift from the central constants.
+    if (comAmount !== SALES_COORDINATOR_COMMISSION || comAmountAlt !== SALES_COORDINATOR_COMMISSION_ALT) {
+      return { success: false, error: `Commission must be ₱${SALES_COORDINATOR_COMMISSION} for MF ${mfThreshold} and ₱${SALES_COORDINATOR_COMMISSION_ALT} for MF ${altThreshold} per approved business rule.` };
     }
     if (comAmount > mfAmount || comAmountAlt > mfAmount) {
       return { success: false, error: 'Commission cannot exceed membership fee amount' };
@@ -4273,10 +4346,88 @@ ipcMain.handle('notifications:checkOverdueRemittances', async (event) => {
   return await checkOverdueRemittances();
 });
 
+// ===== RENEWAL-BALANCE HELPERS =====
+// Renewal month coincides with the registration month: the healed renewal date is
+// the registration month/day anniversary in `year` (clamped for Feb 29).
+function anniversaryInYear(regDate, year) {
+  const m = regDate.getMonth() + 1;
+  const lastDay = new Date(year, m, 0).getDate();
+  return new Date(year, m - 1, Math.min(regDate.getDate(), lastDay));
+}
+
+// The next renewal date that preserves the member's registered month/day and is
+// strictly after `today`. Used when a renewal is overdue or the date is missing so
+// the new term stays aligned to the registration anniversary and is never reset to
+// the payment date. Anchors on a plausible registration_date, else the existing
+// renewal_date, else today (giving today + 1 year as the last-resort fallback).
+function nextFutureRenewalAnniversary(member, today) {
+  const todayYear = today.getFullYear();
+  let anchor = null;
+  if (member.registration_date) {
+    const reg = new Date(String(member.registration_date).slice(0, 10) + 'T00:00:00');
+    const regYear = reg.getFullYear();
+    if (!Number.isNaN(reg.getTime()) && regYear >= 2000 && regYear <= todayYear + 1) anchor = reg;
+  }
+  if (!anchor && member.renewal_date) {
+    const ren = new Date(String(member.renewal_date).slice(0, 10) + 'T00:00:00');
+    if (!Number.isNaN(ren.getTime())) anchor = ren;
+  }
+  if (!anchor) anchor = new Date(today);
+  let year = todayYear;
+  let next = anniversaryInYear(anchor, year);
+  while (next <= today) {
+    year++;
+    next = anniversaryInYear(anchor, year);
+  }
+  return next;
+}
+
+// True when the member has a genuine completed qualifying MF renewal that covers
+// the current term — i.e. they renewed even if `renewal_date` is stale. Genuine
+// means either a deposit in a real remittance slip (remId >= 11; the early
+// July/early-Aug bulk rows are import artifacts, see fix-renewal-dates.js), or a
+// renewal_success notification processed by the app — and the deposit is not the
+// initial registration fee. Returns the healed renewal_date (registration
+// anniversary in the year after the last genuine renewal), or null when not covered.
+async function getMemberPaidThroughDate(memberId, pool, today) {
+  const [mfRows] = await pool.execute(
+    `SELECT r.DateDeposit FROM remittance_details rd JOIN remittances r ON rd.RemittanceId = r.Id
+     WHERE rd.MemberId = ? AND rd.MF IN (?, ?) AND r.Status = 'Completed' AND r.Id >= 11
+     ORDER BY r.DateDeposit DESC LIMIT 1`,
+    [memberId, BusinessRules.RULES.MF_DEFAULT, BusinessRules.RULES.MF_ALT]
+  );
+
+  let lastRenewal = null;
+  if (mfRows.length > 0) {
+    lastRenewal = new Date(String(mfRows[0].DateDeposit).slice(0, 10) + 'T00:00:00');
+  } else {
+    const [nt] = await pool.execute(
+      "SELECT DATE(created_at) AS d FROM notifications WHERE member_id = ? AND type = 'renewal_success' ORDER BY created_at DESC LIMIT 1",
+      [memberId]
+    );
+    if (nt.length > 0 && nt[0].d) lastRenewal = new Date(String(nt[0].d).slice(0, 10) + 'T00:00:00');
+    else return null;
+  }
+  if (!lastRenewal || Number.isNaN(lastRenewal.getTime())) return null;
+
+  const [memberRows] = await pool.execute('SELECT registration_date FROM members WHERE Id = ?', [memberId]);
+  if (memberRows.length === 0 || !memberRows[0].registration_date) return null;
+  const reg = new Date(String(memberRows[0].registration_date).slice(0, 10) + 'T00:00:00');
+  const regFloor = new Date(reg);
+  regFloor.setDate(regFloor.getDate() + BusinessRules.RULES.INITIAL_MF_GRACE_DAYS);
+  if (lastRenewal < regFloor) return null; // initial registration fee only, not a renewal
+
+  const paidThrough = anniversaryInYear(reg, lastRenewal.getFullYear() + 1);
+  const graceFloor = new Date(today);
+  graceFloor.setDate(graceFloor.getDate() - BusinessRules.RULES.OVERDUE_REMITTANCE_DAYS);
+  if (paidThrough < graceFloor) return null; // last genuine renewal too old to cover today
+  return paidThrough;
+}
+
 async function checkMemberRenewals() {
   try {
     const pool = db.getPool();
-    const results = { created: 0, inactivated: 0 };
+    const results = { created: 0, inactivated: 0, renewed: 0 };
 
     // Get active members with renewal_date
     const [members] = await pool.execute(
@@ -4322,19 +4473,42 @@ async function checkMemberRenewals() {
         title = 'Grace Period';
         const graceEnd = new Date(renewalDate);
         graceEnd.setDate(graceEnd.getDate() + 15);
-        message = `${member.full_name} is currently within the 15-day grace period. Membership remains Active until ${formatDateStr(graceEnd.toISOString().slice(0,10))}.`;
+        message = `${member.full_name} is currently within the 15-day grace period. Membership remains Active until ${formatDateStr(fmtLocal(graceEnd))}.`;
         priority = 'warning';
       } else if (diffDays < -15) {
-        // Grace period expired - change status to Inactive
-        type = 'inactive';
-        title = 'Membership Inactive';
-        message = `${member.full_name} did not renew before the grace period expired. Membership status has been changed to Inactive.`;
-        priority = 'critical';
+        // Grace period expired. Only truly lapsed members (no genuine qualifying
+        // MF renewal covering the current term) are inactivated. A stale
+        // renewal_date (e.g. reverted by a data migration) must not inactivate a
+        // member who actually renewed — check their payment history first.
+        const paidThrough = await getMemberPaidThroughDate(member.Id, pool, today);
+        if (paidThrough) {
+          // Member renewed based on their balance; heal the stale date instead.
+          type = null;
+          await pool.execute(
+            "UPDATE members SET renewal_date = ?, member_status = 'Active' WHERE Id = ?",
+            [fmtLocal(paidThrough), member.Id]
+          );
+          await pool.execute(
+            "UPDATE notifications SET status = 'resolved', resolved_at = NOW() WHERE member_id = ? AND type != 'renewal_success'",
+            [member.Id]
+          );
+          await pool.execute(
+            "INSERT INTO notifications (member_id, type, title, message, priority) VALUES (?, 'renewal_success', 'Renewal Successful', ?, 'info')",
+            [member.Id, `${member.full_name} has successfully renewed their membership. The next renewal date is ${formatDateStr(fmtLocal(paidThrough))}.`]
+          );
+          broadcastDataChanged();
+          results.renewed++;
+        } else {
+          type = 'inactive';
+          title = 'Membership Inactive';
+          message = `${member.full_name} did not renew before the grace period expired. Membership status has been changed to Inactive.`;
+          priority = 'critical';
 
-        // Update member status to Inactive
-        await pool.execute("UPDATE members SET member_status = 'Inactive' WHERE Id = ?", [member.Id]);
-        broadcastDataChanged();
-        results.inactivated++;
+          // Update member status to Inactive
+          await pool.execute("UPDATE members SET member_status = 'Inactive' WHERE Id = ?", [member.Id]);
+          broadcastDataChanged();
+          results.inactivated++;
+        }
       }
 
       if (type) {
@@ -4552,29 +4726,27 @@ async function handleMemberRenewal(memberId, pool) {
     }
 
     // ===== RENEWAL DATE EXTENSION =====
-    // Compute next renewal date:
-    // - If renewal_date is NULL: start from today + 1 year
-    // - If renewal_date is in the past (overdue): extend from today + 1 year
-    // - If renewal_date is in the future: extend from current renewal_date + 1 year (preserves anniversary)
+    // Compute the next renewal date while preserving the member's registered month:
+    // - On-time / early: extend the current renewal date by 1 year (unchanged).
+    // - NULL or overdue: never reset to the payment date — anchor on the registered
+    //   month/day and advance by whole years to the NEXT future anniversary.
     let nextRenewalDate;
-    if (!member.renewal_date) {
-      // First renewal or missing data
-      nextRenewalDate = new Date(today);
-      nextRenewalDate.setFullYear(nextRenewalDate.getFullYear() + 1);
-    } else {
+    if (member.renewal_date) {
       const currentRenewal = new Date(member.renewal_date);
       currentRenewal.setHours(0, 0, 0, 0);
-      if (currentRenewal < today) {
-        // Overdue: reset from today
-        nextRenewalDate = new Date(today);
-        nextRenewalDate.setFullYear(nextRenewalDate.getFullYear() + 1);
-      } else {
-        // On time or early: preserve anniversary
+      if (currentRenewal > today) {
+        // On time or early: preserve the existing anniversary
         nextRenewalDate = new Date(currentRenewal);
         nextRenewalDate.setFullYear(nextRenewalDate.getFullYear() + 1);
+      } else {
+        // Overdue: keep the registered month, advance to the next future anniversary
+        nextRenewalDate = nextFutureRenewalAnniversary(member, today);
       }
+    } else {
+      // Missing renewal date: anchor to the registration anniversary when known
+      nextRenewalDate = nextFutureRenewalAnniversary(member, today);
     }
-    const nextRenewalStr = nextRenewalDate.toISOString().slice(0, 10);
+    const nextRenewalStr = fmtLocal(nextRenewalDate);
 
     // Update member renewal date and restore to Active
     await pool.execute(
@@ -4664,4 +4836,99 @@ ipcMain.handle('update:install', async (event) => {
 
 ipcMain.handle('app:getVersion', () => {
   return app.getVersion();
+});
+
+// ---- Renderer error capture -------------------------------------------------
+// Every uncaught renderer exception (page, script, promise) is appended here so
+// a "white screen / won't open" can be diagnosed from one log line instead of
+// guessing. Log file: %LOCALAPPDATA%\GoldenHope\renderer-errors.log
+const rendererLog = (...parts) => {
+  try {
+    const fs = require('fs');
+    const line = `[${new Date().toISOString()}] ${parts.join(' ')}\n`;
+    fs.appendFileSync(path.join(app.getPath('userData'), 'renderer-errors.log'), line);
+  } catch (_) { /* logging must never crash the app */ }
+};
+
+ipcMain.handle('app:logRendererError', (_event, err) => {
+  rendererLog('[renderer]', String((err && err.message) || err || 'unknown error'));
+  return { success: true };
+});
+
+// ---- Login/DB diagnostics (read-only) ---------------------------------------
+// Produces a copyable report so the exact reason a login fails (locked account,
+// missing user, incompatible hash, DB down, wrong config) is visible instead of
+// a generic message. Never writes to the database.
+ipcMain.handle('db:diagnose', async () => {
+  const maskPassword = (pw) => (pw ? String(pw).slice(0, 2) + '***' : '(unset)');
+  const out = {
+    appVersion: app.getVersion(),
+    packaged: app.isPackaged,
+    endpoint: {
+      host: process.env.DB_HOST || '127.0.0.1',
+      port: process.env.DB_PORT || '5432',
+      user: process.env.DB_USER || 'goldenhope',
+      database: process.env.DB_NAME || 'goldenhope_db',
+      password: maskPassword(process.env.DB_PASSWORD)
+    },
+    pgBinDir: process.env.PG_BIN_DIR || '(default search)',
+    pgDataDir: process.env.PG_DATA_DIR || '(default search)',
+    reachable: false,
+    connectError: null,
+    usersCount: null,
+    adminUsers: [],
+    loginAttempts: []
+  };
+  try {
+    const pool = db.getPool();
+    const [ping] = await pool.execute('SELECT 1 AS ok');
+    out.reachable = ping && ping[0] && ping[0].ok === 1;
+    const [uc] = await pool.execute('SELECT COUNT(*) AS cnt FROM "users"');
+    out.usersCount = uc[0] ? uc[0].cnt : null;
+    const [admins] = await pool.execute(
+      'SELECT "Id","Username","FullName","Role","IsActive","IsLocked","MustChangePassword","LastLogin",left("PasswordHash",7) AS hashScheme FROM "users" ORDER BY "Id"'
+    );
+    out.adminUsers = admins || [];
+    const [attempts] = await pool.execute(
+      'SELECT username, attempt_count, locked_until FROM login_attempts ORDER BY last_attempt DESC LIMIT 10'
+    );
+    out.loginAttempts = attempts || [];
+  } catch (error) {
+    out.reachable = false;
+    const code = (error && (error.code || error.sqlState)) || '';
+    const msg = (error && (error.sqlMessage || error.message)) || '';
+    out.connectError = `${code} ${msg}`.trim();
+  }
+  return out;
+});
+
+// ---- Emergency admin reset (explicit user action only) ----------------------
+// Re-locks nothing beyond the admin account: sets the `admin` row back to
+// password "admin" (bcrypt), forces a password change on next login, clears
+// lock flags. Returns crisp errors so the diagnose panel can explain why not.
+ipcMain.handle('db:resetDefaultLogin', async (_event, payload) => {
+  if (!payload || payload.confirm !== true) {
+    return { success: false, error: 'Confirmation required.' };
+  }
+  try {
+    const pool = db.getPool();
+    const [rows] = await pool.execute(
+      'SELECT "Id" FROM "users" WHERE LOWER("Username") = LOWER(?)',
+      ['admin']
+    );
+    if (!rows || rows.length === 0) {
+      return { success: false, error: 'No admin account was found.' };
+    }
+    const hash = bcrypt.hashSync('admin', bcrypt.genSaltSync(10));
+    await pool.execute(
+      'UPDATE "users" SET "PasswordHash" = ?, "MustChangePassword" = 1, "IsActive" = 1, "IsLocked" = 0 WHERE LOWER("Username") = LOWER(?)',
+      [hash, 'admin']
+    );
+    try {
+      await pool.execute('DELETE FROM login_attempts WHERE LOWER(username) = LOWER(?)', ['admin']);
+    } catch (_) {}
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: classifyLoginError(error).error || maskSqlError(error) };
+  }
 });
