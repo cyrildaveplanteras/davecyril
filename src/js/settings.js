@@ -420,7 +420,7 @@ function renderUserRow(u) {
   const status = getUserStatus(u);
   const me = getCurrentUser();
   const canManage = me.role === 'Admin';
-  const isSelf = me.id === u.Id;
+  const isSelf = String(me.id) === String(u.Id);
   const targetIsAdmin = u.Role === 'Admin';
   // Branch Managers cannot modify Admin accounts
   const blockedByRole = me.role === 'Branch Manager' && targetIsAdmin && !isSelf;
@@ -493,7 +493,7 @@ function openUserDrawer(id) {
   if (!userDrawerIsNew) {
     data = allUsers.find(u => u.Id === id);
     if (!data) { showToast('User not found', 'error'); return; }
-    if (me.role === 'Branch Manager' && data.Role === 'Admin' && me.id !== data.Id) {
+    if (me.role === 'Branch Manager' && data.Role === 'Admin' && String(me.id) !== String(data.Id)) {
       showToast('You cannot modify Admin accounts', 'error');
       return;
     }
