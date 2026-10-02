@@ -24,8 +24,14 @@ jobs:
         run: |
           node --check main.js
           node --check preload.js
+          node --check preload-dbsetup.js
           node --check scripts/build-win.js
           for f in $(find src scripts -name '*.js'); do node --check "$f"; done
+
+      - name: Unit + regression tests
+        run: |
+          node scripts/test-business-rules.js
+          node scripts/test-security-regressions.js
 
       - name: Package (unsigned test build)
         run: npx electron-builder --dir --config.win.signAndEditExecutable=false
