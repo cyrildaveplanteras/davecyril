@@ -474,6 +474,7 @@ function changeUsersPage(dir) {
 // Drawer & avatar state
 let userDrawerCurrentId = null;
 let userDrawerPhotoBase64 = null;
+let userDrawerSavedPhoto = null;
 let userDrawerIsNew = false;
 let userDrawerZoom = 1;
 let userDrawerRotate = 0;
@@ -484,6 +485,7 @@ function openUserDrawer(id) {
   userDrawerIsNew = id == null;
   userDrawerCurrentId = id;
   userDrawerPhotoBase64 = null;
+  userDrawerSavedPhoto = null;
   userDrawerZoom = 1;
   userDrawerRotate = 0;
 
@@ -496,6 +498,7 @@ function openUserDrawer(id) {
       return;
     }
     userDrawerPhotoBase64 = data.ProfilePicture || null;
+    userDrawerSavedPhoto = userDrawerPhotoBase64;
   }
 
   const isEdit = !userDrawerIsNew;
@@ -818,6 +821,7 @@ function applyAvatarEdit() {
   const initials = document.getElementById('userAvatarInitials');
   if (previewImg) { previewImg.src = editorImg.src; previewImg.style.display = 'block'; }
   if (initials) initials.style.display = 'none';
+  userDrawerSavedPhoto = editorImg.src;
 
   // Hide editor
   const editor = document.getElementById('userAvatarEditor');
@@ -837,18 +841,14 @@ function applyAvatarEdit() {
 function cancelAvatarEdit() {
   const editor = document.getElementById('userAvatarEditor');
   if (editor) editor.classList.remove('show');
-  userDrawerPhotoBase64 = null;
-  // If there was a previous photo, keep showing it
-  const previewImg = document.getElementById('userAvatarImg');
-  if (previewImg && !previewImg.src) {
-    previewImg.style.display = 'none';
-    const initials = document.getElementById('userAvatarInitials');
-    if (initials) initials.style.display = 'flex';
-  }
+  // Discard the pending crop and fall back to the last committed photo, so a
+  // later save does not overwrite an existing avatar with null.
+  userDrawerPhotoBase64 = userDrawerSavedPhoto;
 }
 
 function removeUserPhoto() {
   userDrawerPhotoBase64 = null;
+  userDrawerSavedPhoto = null;
   const previewImg = document.getElementById('userAvatarImg');
   const initials = document.getElementById('userAvatarInitials');
   if (previewImg) { previewImg.src = ''; previewImg.style.display = 'none'; }
