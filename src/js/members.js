@@ -215,20 +215,20 @@ async function renderMemberRegistration(member = null) {
             </div>
             <div class="mr-field"><label>Municipality / City <span class="required-star">*</span></label>
               <div class="combo-wrapper">
-                <input type="text" class="combo-input" id="mMunicipalitySearch" placeholder="Select Municipality" autocomplete="off" value="${isEditing ? (member.municipality_name || '') : ''}">
+                <input type="text" class="combo-input" id="mMunicipalitySearch" placeholder="Select Municipality" autocomplete="off" value="${isEditing ? escapeHtml(member.municipality_name || '') : ''}">
                 <input type="hidden" id="mMunicipalityId" value="${isEditing ? (member.municipality_id || member.municipality_id || '') : ''}">
                 <div class="combo-dropdown" id="municipalityDropdown"></div>
               </div>
             </div>
             <div class="mr-field"><label>Barangay <span class="required-star">*</span></label>
               <div class="combo-wrapper">
-                <input type="text" class="combo-input" id="mBarangaySearch" placeholder="${isEditing && (member.municipality_id || member.municipality_id) ? 'Select Barangay' : 'Select Municipality First'}" autocomplete="off" value="${isEditing ? (member.barangay_name || '') : ''}" ${isEditing && !(member.municipality_id || member.municipality_id) ? 'disabled' : ''}>
+                <input type="text" class="combo-input" id="mBarangaySearch" placeholder="${isEditing && (member.municipality_id || member.municipality_id) ? 'Select Barangay' : 'Select Municipality First'}" autocomplete="off" value="${isEditing ? escapeHtml(member.barangay_name || '') : ''}" ${isEditing && !(member.municipality_id || member.municipality_id) ? 'disabled' : ''}>
                 <input type="hidden" id="mBarangayId" value="${isEditing ? (member.barangay_id || member.barangay_id || '') : ''}">
                 <div class="combo-dropdown" id="barangayDropdown"></div>
               </div>
             </div>
             <div class="mr-field mr-field-full"><label>Complete Address (Auto-Generated)</label>
-              <textarea id="mCompleteAddress" rows="2" readonly style="background:#f1f5f9;color:#475569;cursor:default">${isEditing ? (member.complete_address || member.complete_address || '') : ''}</textarea>
+              <textarea id="mCompleteAddress" rows="2" readonly style="background:#f1f5f9;color:#475569;cursor:default">${isEditing ? escapeHtml(member.complete_address || '') : ''}</textarea>
             </div>
             <input type="hidden" id="mAddress" value="${escapeHtml(address)}">
           </div>

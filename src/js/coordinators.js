@@ -89,7 +89,7 @@ async function loadCoordinators(type) {
         <td style="color:var(--text-secondary)">${escapeHtml(c[areaField] || '')}</td>
         <td style="color:var(--text-secondary)">${escapeHtml(c.ContactNumber || '')}</td>
         <td style="color:var(--text-secondary)">${escapeHtml(c.Email || '')}</td>
-        <td><span class="coord-status-badge ${(c.Status || 'Active').toLowerCase()}">${escapeHtml(c.Status || 'Active')}</span></td>
+        <td><span class="coord-status-badge ${escapeHtml((c.Status || 'Active').toLowerCase())}">${escapeHtml(c.Status || 'Active')}</span></td>
         <td>
           <button class="coord-action-btn edit-btn" onclick="${type === 'sales' ? `showCoordinatorDetails('${type}', ${c.Id})` : `editCoordinator('${type}', ${c.Id})`}" title="View / Edit">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -176,7 +176,7 @@ async function showCoordinatorDetails(type, id) {
                 <div><strong style="font-size:12px;color:var(--text-light);display:block">Contact Number</strong><span>${escapeHtml(coord.ContactNumber || 'N/A')}</span></div>
                 <div><strong style="font-size:12px;color:var(--text-light);display:block">Email</strong><span>${escapeHtml(coord.Email || 'N/A')}</span></div>
                 <div><strong style="font-size:12px;color:var(--text-light);display:block">Date Hired</strong><span>${coord.CreatedAt ? new Date(coord.CreatedAt).toLocaleDateString() : 'N/A'}</span></div>
-                <div><strong style="font-size:12px;color:var(--text-light);display:block">Status</strong><span class="coord-status-badge ${(coord.Status || 'Active').toLowerCase()}">${escapeHtml(coord.Status || 'Active')}</span></div>
+                <div><strong style="font-size:12px;color:var(--text-light);display:block">Status</strong><span class="coord-status-badge ${escapeHtml((coord.Status || 'Active').toLowerCase())}">${escapeHtml(coord.Status || 'Active')}</span></div>
               </div>
             </div>
           </div>
@@ -330,7 +330,7 @@ async function loadCoordinatorSOA(coordinatorId) {
           <td style="text-align:right;color:var(--primary);font-weight:600">${fmt(t.CommissionAmount)}</td>
           <td style="text-align:right">${fmt(t.NetMSCAmount)}</td>
           <td>${escapeHtml(t.EncoderName || '--')}</td>
-          <td><span class="coord-status-badge ${(t.Status||'Completed').toLowerCase()}">${escapeHtml(t.Status || 'Completed')}</span></td>
+          <td><span class="coord-status-badge ${escapeHtml((t.Status||'Completed').toLowerCase())}">${escapeHtml(t.Status || 'Completed')}</span></td>
         </tr>`;
       }).join('');
     }

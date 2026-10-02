@@ -595,7 +595,7 @@ function buildRemittanceSlipFragment(data, monthLabel) {
     return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   })() : '';
   const logoHtml = data.logoDataUrl
-    ? `<img src="${data.logoDataUrl}" alt="GOLDENHOPE Logo" style="width:35px;height:35px;object-fit:contain;display:block">`
+    ? `<img src="${escapeHtml(data.logoDataUrl)}" alt="GOLDENHOPE Logo" style="width:35px;height:35px;object-fit:contain;display:block">`
     : `<div style="width:35px;height:35px;border:1px solid #000;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">GH</div>`;
 
   let totalMF = 0, totalMSC = 0, totalHDA = 0, totalAmount = 0, totalCOM = 0, totalNet = 0;
@@ -754,7 +754,7 @@ function buildRemittanceSlipHTML(data) {
     return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   })() : '';
   const logoHtml = data.logoDataUrl
-    ? `<img src="${data.logoDataUrl}" alt="GOLDENHOPE Logo" style="width:35px;height:35px;object-fit:contain;display:block">`
+    ? `<img src="${escapeHtml(data.logoDataUrl)}" alt="GOLDENHOPE Logo" style="width:35px;height:35px;object-fit:contain;display:block">`
     : `<div style="width:35px;height:35px;border:1px solid #000;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px">GH</div>`;
 
   let totalMF = 0, totalMSC = 0, totalHDA = 0, totalAmount = 0, totalCOM = 0, totalNet = 0;
@@ -2305,9 +2305,9 @@ function exportMMLCSV() {
   const rows = mmlBuildRows();
   rows.forEach(r => {
     csv.push([
-      r.num, `"${r.name.replace(/"/g, '""')}"`, `"${r.address.replace(/"/g, '""')}"`,
+      r.num, r.name, r.address,
       r.afno, r.renewal_date, r.balance, '', ''
-    ].join(','));
+    ].map(csvCell).join(','));
   });
   const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
@@ -2404,22 +2404,22 @@ function exportRFRCSV() {
     const shortage = parseFloat(m.balance_shortage) || 0;
     csv.push([
       idx + 1,
-      `"${(m.af_no || '').replace(/"/g, '""')}"`,
-      `"${(m.full_name || '').replace(/"/g, '""')}"`,
-      `"${(m.district || '').replace(/"/g, '""')}"`,
-      `"${(m.Barangay || '').replace(/"/g, '""')}"`,
-      `"${(m.SalesCoordinator || '').replace(/"/g, '""')}"`,
-      `"${(m.membership_status || '').replace(/"/g, '""')}"`,
+      m.af_no,
+      m.full_name,
+      m.district,
+      m.Barangay,
+      m.SalesCoordinator,
+      m.membership_status,
       formatDate(m.registration_date),
       formatDate(m.renewal_date),
       m.days_remaining >= 0 ? m.days_remaining : 'Expired',
       balance.toFixed(2),
       (m.required_msc || 100).toFixed(2),
       shortage.toFixed(2),
-      `"${m.last_deposit_date ? formatDate(m.last_deposit_date) : '-'}"`,
-      `"${(m.contact_no || '').replace(/"/g, '""')}"`,
-      `"${(m.remarks || '').replace(/"/g, '""')}"`
-    ].join(','));
+      m.last_deposit_date ? formatDate(m.last_deposit_date) : '-',
+      m.contact_no,
+      m.remarks
+    ].map(csvCell).join(','));
   });
   const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
@@ -2660,18 +2660,18 @@ function exportDFMCSV() {
     const shortage = parseFloat(m.balance_shortage) || 0;
     csv.push([
       idx + 1,
-      `"${(m.af_no || '').replace(/"/g, '""')}"`,
-      `"${(m.full_name || '').replace(/"/g, '""')}"`,
-      `"${(m.district || '').replace(/"/g, '""')}"`,
-      `"${(m.Barangay || '').replace(/"/g, '""')}"`,
-      `"${(m.SalesCoordinator || '').replace(/"/g, '""')}"`,
+      m.af_no,
+      m.full_name,
+      m.district,
+      m.Barangay,
+      m.SalesCoordinator,
       balance.toFixed(2),
       (m.required_msc || 100).toFixed(2),
       shortage.toFixed(2),
-      `"${m.last_deposit_date ? formatDate(m.last_deposit_date) : '-'}"`,
-      `"${(m.contact_no || '').replace(/"/g, '""')}"`,
-      `"${(m.remarks || '').replace(/"/g, '""')}"`
-    ].join(','));
+      m.last_deposit_date ? formatDate(m.last_deposit_date) : '-',
+      m.contact_no,
+      m.remarks
+    ].map(csvCell).join(','));
   });
   const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);

@@ -4115,7 +4115,7 @@ async function loadPdfHtmlWindow(pdfWindow, html) {
   const os = require('os');
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-pdf-'));
   const file = path.join(tmpDir, 'report.html');
-  fs.writeFileSync(file, html, 'utf8');
+  fs.writeFileSync(file, withPdfCsp(html), 'utf8');
   pdfWindow.webContents.on('will-navigate', (e, url) => { e.preventDefault(); });
   pdfWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   pdfWindow.on('closed', () => {
@@ -4123,6 +4123,19 @@ async function loadPdfHtmlWindow(pdfWindow, html) {
   });
   await pdfWindow.loadFile(file);
   return tmpDir;
+}
+
+// Reports are assembled from database values, so the print document is treated
+// as untrusted input: a stored value could still smuggle markup past an
+// unescaped sink elsewhere. The PDF renderer only needs inline CSS and data:
+// images, so lock the document down to exactly that. This runs before the file
+// is written, so no script or external request can execute during rendering.
+function withPdfCsp(html) {
+  const csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'; font-src data:;">';
+  const doc = String(html || '');
+  if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, (m) => m + csp);
+  if (/<html[^>]*>/i.test(doc)) return doc.replace(/<html[^>]*>/i, (m) => m + csp);
+  return csp + doc;
 }
 
 ipcMain.handle('export:printToPDF', async (event, { html, filename }) => {

@@ -123,6 +123,20 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+// Serialize one value for a CSV export. Neutralizes spreadsheet formula
+// injection by prefixing a single quote to values starting with =, +, -, @,
+// tab or CR (which Excel would otherwise execute as a formula), then applies
+// RFC 4180 quoting. Plain numeric values (including negatives) are left intact
+// so legitimate numbers stay numeric. Always returns a string.
+function csvCell(value) {
+  if (value === null || value === undefined) return '';
+  let s = String(value);
+  const isNumber = /^-?\d+(\.\d+)?$/.test(s);
+  if (!isNumber && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
 // ===== GET CURRENT USER =====
 function getCurrentUser() {
   const data = sessionStorage.getItem('currentUser');

@@ -429,7 +429,7 @@ async function processDeathCase(memberId) {
     `<div class="form-grid">
       <div class="form-group"><label>Member</label><input type="text" value="${escapeHtml(m.full_name)}" readonly></div>
       <div class="form-group"><label>Deceased Name</label><input type="text" id="dcName" value="${escapeHtml(m.full_name)}"></div>
-      <div class="form-group"><label>Date of Death</label><input type="date" id="dcDate" onchange="updateDeathBenefitDisplay('${m.registration_date || ''}', '${m.membership_status || 'Regular'}')"></div>
+      <div class="form-group"><label>Date of Death</label><input type="date" id="dcDate"></div>
       <div class="form-group"><label>Cause of Death</label><input type="text" id="dcCause"></div>
       <div class="form-group"><label>Beneficiary</label><input type="text" id="dcBeneficiary"></div>
     </div>
@@ -438,7 +438,9 @@ async function processDeathCase(memberId) {
     `<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
      <button class="btn btn-danger" onclick="confirmDeathCase(${memberId})">Process</button>`
   );
-  document.getElementById('dcDate').value = fmtLocalDate();
+  const dcDateEl = document.getElementById('dcDate');
+  dcDateEl.value = fmtLocalDate();
+  dcDateEl.addEventListener('change', () => updateDeathBenefitDisplay(m.registration_date, m.membership_status));
   if (m.registration_date) updateDeathBenefitDisplay(m.registration_date, m.membership_status);
 }
 
@@ -524,9 +526,9 @@ async function exportMemberListCSV() {
   const headers = ['AFNo', 'FullName', 'BirthDate', 'Age', 'Gender', 'ContactNo', 'Address', 'District', 'MemberStatus', 'BarangayCoordinator', 'SalesCoordinator'];
   const csv = [headers.join(',')];
   result.data.forEach(m => {
-    csv.push([m.af_no, `"${(m.full_name || '').replace(/"/g, '""')}"`, m.birth_date || '', m.age || '', m.gender || '',
-      m.contact_no || '', `"${(m.address || '').replace(/"/g, '""')}"`, m.district || '', m.member_status || '',
-      `"${(m.BarangayCoordinator || '').replace(/"/g, '""')}"`, `"${(m.SalesCoordinator || '').replace(/"/g, '""')}"`].join(','));
+    csv.push([m.af_no, m.full_name, m.birth_date, m.age, m.gender,
+      m.contact_no, m.address, m.district, m.member_status,
+      m.BarangayCoordinator, m.SalesCoordinator].map(csvCell).join(','));
   });
   const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
