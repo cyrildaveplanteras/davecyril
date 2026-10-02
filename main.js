@@ -367,7 +367,15 @@ function createWindow() {
 // Everything after the database configuration is resolved. Split out of
 // app.whenReady() so the first-run setup dialog and the normal boot path run
 // byte-identical startup logic.
+//
+// Single-shot: this registers IPC handlers, and ipcMain.handle() throws if a
+// channel is registered twice. The setup page can invoke dbsetup:continue more
+// than once, so without this guard a second call would crash startup.
+let startupRan = false;
 async function continueStartup() {
+  if (startupRan) return;
+  startupRan = true;
+
   // Ensure the database exists before creating pool
   try {
     await db.ensureDatabase();
@@ -1046,9 +1054,16 @@ ipcMain.handle('auth:me', (event) => {
 // ===== MEMBER IPC HANDLERS =====
 
 // ===== ADDRESS IPC HANDLERS =====
+// PSGC reference data (regions/provinces/municipalities/barangays). Not
+// sensitive on its own, but these handlers were reachable before login, which
+// let anyone who could load the login window enumerate the reference tables and
+// use them as a probe for whether the database was up. No role restriction:
+// every role needs them to fill in an address.
 function registerAddressIPCHandlers() {
-  ipcMain.handle('address:getRegions', async () => {
+  ipcMain.handle('address:getRegions', async (event) => {
     try {
+      const g = authGuard(event);
+      if (!g.ok) return { success: false, error: g.error };
       const [rows] = await db.getPool().execute('SELECT id, psgc_code, name FROM ref_regions ORDER BY name');
       return { success: true, data: rows };
     } catch (error) {
@@ -1058,6 +1073,8 @@ function registerAddressIPCHandlers() {
 
   ipcMain.handle('address:getProvinces', async (event, { regionId } = {}) => {
     try {
+      const g = authGuard(event);
+      if (!g.ok) return { success: false, error: g.error };
       let query = 'SELECT id, psgc_code, name, region_id FROM ref_provinces';
       const params = [];
       if (regionId) {
@@ -1074,6 +1091,8 @@ function registerAddressIPCHandlers() {
 
   ipcMain.handle('address:getMunicipalities', async (event, { provinceId } = {}) => {
     try {
+      const g = authGuard(event);
+      if (!g.ok) return { success: false, error: g.error };
       let query = 'SELECT id, province_id, psgc_code, name, municipality_type FROM ref_municipalities';
       const params = [];
       if (provinceId) {
@@ -1090,6 +1109,8 @@ function registerAddressIPCHandlers() {
 
   ipcMain.handle('address:getBarangays', async (event, { municipalityId } = {}) => {
     try {
+      const g = authGuard(event);
+      if (!g.ok) return { success: false, error: g.error };
       if (!municipalityId) return { success: true, data: [] };
       const [rows] = await db.getPool().execute(
         'SELECT id, municipality_id, psgc_code, name FROM ref_barangays WHERE municipality_id = ? ORDER BY name',
@@ -1101,8 +1122,10 @@ function registerAddressIPCHandlers() {
     }
   });
 
-  ipcMain.handle('address:getAllBarangays', async () => {
+  ipcMain.handle('address:getAllBarangays', async (event) => {
     try {
+      const g = authGuard(event);
+      if (!g.ok) return { success: false, error: g.error };
       const [rows] = await db.getPool().execute(
         `SELECT b.id, b.name, b.psgc_code, b.municipality_id, m.name as municipality_name, p.name as province_name
          FROM ref_barangays b
@@ -1130,8 +1153,13 @@ function registerPsgcIPCHandlers() {
     }
   });
 
-  ipcMain.handle('psgc:getImportLogs', async () => {
+  // The psgc:* readers below expose import/migration history, duplicate records
+  // and an audit trail of who changed what. That is administrative data, and it
+  // named staff accounts, so it requires the same role as psgc:import.
+  ipcMain.handle('psgc:getImportLogs', async (event) => {
     try {
+      const g = authGuard(event, ['Admin']);
+      if (!g.ok) return { success: false, error: g.error };
       const [rows] = await db.getPool().execute(
         'SELECT * FROM psgc_import_logs ORDER BY import_date DESC LIMIT 100'
       );
@@ -1141,8 +1169,10 @@ function registerPsgcIPCHandlers() {
     }
   });
 
-  ipcMain.handle('psgc:getMigrationLogs', async () => {
+  ipcMain.handle('psgc:getMigrationLogs', async (event) => {
     try {
+      const g = authGuard(event, ['Admin']);
+      if (!g.ok) return { success: false, error: g.error };
       const [rows] = await db.getPool().execute(
         'SELECT * FROM psgc_migration_logs ORDER BY migrated_at DESC LIMIT 500'
       );
@@ -1152,8 +1182,10 @@ function registerPsgcIPCHandlers() {
     }
   });
 
-  ipcMain.handle('psgc:getDuplicateRecords', async () => {
+  ipcMain.handle('psgc:getDuplicateRecords', async (event) => {
     try {
+      const g = authGuard(event, ['Admin']);
+      if (!g.ok) return { success: false, error: g.error };
       const pool = db.getPool();
       const [munDups] = await pool.execute(
         'SELECT name, COUNT(*) as cnt FROM ref_municipalities GROUP BY name HAVING COUNT(*) > 1'
@@ -1185,8 +1217,10 @@ function registerPsgcIPCHandlers() {
     }
   });
 
-  ipcMain.handle('psgc:getAuditLogs', async () => {
+  ipcMain.handle('psgc:getAuditLogs', async (event) => {
     try {
+      const g = authGuard(event, ['Admin']);
+      if (!g.ok) return { success: false, error: g.error };
       const [rows] = await db.getPool().execute(
         'SELECT * FROM psgc_audit_log ORDER BY created_at DESC LIMIT 200'
       );
@@ -1593,8 +1627,10 @@ ipcMain.handle('members:toggleStatus', async (event, { id, status }) => {
   }
 });
 
-ipcMain.handle('members:getHonoraryProgress', async (event, { id }) => {
+ipcMain.handle('members:getHonoraryProgress', async (event, { id } = {}) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const [rows] = await db.getPool().execute(
       'SELECT membership_status, honorary_years_completed, honorary_start_date FROM members WHERE Id = ?',
       [id]
@@ -1617,8 +1653,10 @@ ipcMain.handle('members:getHonoraryProgress', async (event, { id }) => {
   }
 });
 
-ipcMain.handle('members:nextAfNo', async () => {
+ipcMain.handle('members:nextAfNo', async (event) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const [rows] = await db.getPool().execute("SELECT COALESCE(MAX(CAST(REPLACE(af_no, 'GH-', '') AS INTEGER)), 0) + 1 as next_num FROM members");
     return { success: true, afNo: String(rows[0].next_num).padStart(5, '0') };
   } catch (error) {
@@ -2230,8 +2268,10 @@ ipcMain.handle('remittances:removePendingByMemberId', async (event, { memberId }
   }
 });
 
-ipcMain.handle('remittances:isPending', async (event, { memberId }) => {
+ipcMain.handle('remittances:isPending', async (event, { memberId } = {}) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const [rows] = await db.getPool().execute('SELECT Id FROM pending_remittances WHERE member_id = ?', [memberId]);
     return { success: true, data: rows[0] || null };
   } catch (error) {
@@ -2463,8 +2503,10 @@ ipcMain.handle('coordinators:delete', async (event, { type, id }) => {
   }
 });
 
-ipcMain.handle('coordinators:active', async (event, { type }) => {
+ipcMain.handle('coordinators:active', async (event, { type } = {}) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     if (type !== 'barangay' && type !== 'sales') return { success: false, error: 'Invalid coordinator type' };
     const table = type === 'barangay' ? 'barangay_coordinators' : 'sales_coordinators';
     const [rows] = await db.getPool().execute(`SELECT * FROM ${table} WHERE Status = 'Active'`);
@@ -2579,8 +2621,10 @@ ipcMain.handle('commissions:getCoordinatorTotals', async (event, { coordinatorId
 
 // ===== DEATH CASE IPC HANDLERS =====
 
-ipcMain.handle('deathcases:list', async () => {
+ipcMain.handle('deathcases:list', async (event) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const [rows] = await db.getPool().execute(
       `SELECT dc.*, m.full_name as MemberName FROM death_cases dc
        LEFT JOIN members m ON dc.MemberId = m.Id ORDER BY dc.Id DESC`);
@@ -2741,8 +2785,10 @@ ipcMain.handle('deduction:individual', async (event, { memberId, amount, reason,
   }
 });
 
-ipcMain.handle('deduction:preview', async (event, { month }) => {
+ipcMain.handle('deduction:preview', async (event, { month } = {}) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const pool = db.getPool();
     const monthStr = /^\d{4}-\d{2}$/.test(String(month || '')) ? String(month) : '';
     if (!monthStr) {
@@ -3292,14 +3338,27 @@ ipcMain.handle('settings:get', async (event, { key }) => {
   }
 });
 
-ipcMain.handle('settings:set', async (event, { key, value }) => {
+// The only setting keys the application ever reads. settings:set accepts an
+// arbitrary key from the renderer, which previously meant any authenticated user
+// could insert or overwrite rows the app never reads - pointless here and a way
+// to plant misleading values. Keep this list in sync with the `keys` array in
+// src/js/settings.js and the getSetting() call in src/js/app.js.
+const ALLOWED_SETTING_KEYS = ['org_name', 'org_address', 'org_contact', 'org_email', 'auto_download_updates'];
+const MAX_SETTING_VALUE_LENGTH = 4000;
+
+ipcMain.handle('settings:set', async (event, { key, value } = {}) => {
   try {
     const g = authGuard(event);
     if (!g.ok) return { success: false, error: g.error };
+    if (!ALLOWED_SETTING_KEYS.includes(key)) {
+      return { success: false, error: 'Unknown setting key.' };
+    }
     const pool = db.getPool();
     const locked = await rejectIfLocked(pool);
     if (locked) return locked;
-    await pool.execute('INSERT INTO app_settings (SettingKey, SettingValue) VALUES (?,?) ON CONFLICT (SettingKey) DO UPDATE SET SettingValue = EXCLUDED.SettingValue', [key, value]);
+    const clipped = String(value === undefined || value === null ? '' : value)
+      .slice(0, MAX_SETTING_VALUE_LENGTH);
+    await pool.execute('INSERT INTO app_settings (SettingKey, SettingValue) VALUES (?,?) ON CONFLICT (SettingKey) DO UPDATE SET SettingValue = EXCLUDED.SettingValue', [key, clipped]);
     return { success: true };
   } catch (error) {
     return { success: false, error: maskSqlError(error) };
@@ -3911,8 +3970,10 @@ async function getLockSchedule(pool) {
   return rows.length > 0 ? rows[0] : null;
 }
 
-ipcMain.handle('lock:check', async () => {
+ipcMain.handle('lock:check', async (event) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const pool = db.getPool();
     const activeLock = await checkSystemLock(pool);
     const schedule = await getLockSchedule(pool);
@@ -4138,8 +4199,10 @@ ipcMain.handle('export:printToPDFPortrait', async (event, { html, filename }) =>
   }
 });
 
-ipcMain.handle('export:getLogoBase64', async () => {
+ipcMain.handle('export:getLogoBase64', async (event) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const fs = require('fs');
     const path = require('path');
     const logoPath = path.join(__dirname, 'assets', 'logo.png');
@@ -4156,15 +4219,38 @@ ipcMain.handle('export:getLogoBase64', async () => {
 
 // ===== ACTIVITY LOG IPC =====
 
-ipcMain.handle('activity:log', async (event, { userId, action, description, ipAddress, userAgent, status }) => {
+// Intentionally reachable BEFORE authentication, because the login window logs
+// failed attempts here and there is no session to check yet.
+//
+// SECURITY: the identity is taken from the session store ONLY. This handler used
+// to prefer the renderer-supplied `userId` when one was present, which let any
+// renderer - including the pre-auth login page - attribute an audit entry to an
+// arbitrary user id. The renderer's `userId` argument is now ignored entirely.
+// When there is no session (failed login) the entry is recorded with a NULL
+// AdminUserId, so it can never be mistaken for a real user.
+ipcMain.handle('activity:log', async (event, { userId, action, description, ipAddress, userAgent, status } = {}) => {
   try {
-    // Allow unauthenticated log entries (e.g. failed logins) but never attribute them
-    // to a real user. When a session exists, prefer the session identity over the renderer.
     const g = getSession(event);
-    const effectiveUserId = g ? (userId || g.userId) : null;
+    const effectiveUserId = g ? g.userId : null;
+
+    // These strings come from the renderer, so bound them rather than trusting
+    // them: an audit row must not be able to grow unbounded or break the log UI.
+    const clip = (v, max) => {
+      const s = v === undefined || v === null ? '' : String(v);
+      return s.length > max ? s.slice(0, max) : s;
+    };
+    const allowedStatus = ['Success', 'Failed'].includes(status) ? status : 'Success';
+
     await db.getPool().execute(
       'INSERT INTO ActivityLogs (AdminUserId, Action, Description, IpAddress, UserAgent, Status) VALUES (?,?,?,?,?,?)',
-      [effectiveUserId, action, description, ipAddress || '', userAgent || '', status || 'Success']);
+      [
+        effectiveUserId,
+        clip(action, 100),
+        clip(description, 1000),
+        clip(ipAddress, 100),
+        clip(userAgent, 300),
+        allowedStatus
+      ]);
     return { success: true };
   } catch (error) {
     return { success: false, error: maskSqlError(error) };
@@ -4173,8 +4259,10 @@ ipcMain.handle('activity:log', async (event, { userId, action, description, ipAd
 
 // ===== COMMISSION CONFIG IPC =====
 
-ipcMain.handle('commission:getConfig', async () => {
+ipcMain.handle('commission:getConfig', async (event) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const [rows] = await db.getPool().execute('SELECT * FROM commission_config ORDER BY Id DESC LIMIT 1');
     if (rows.length > 0) {
       return { success: true, config: BusinessRules.normalizeConfig(rows[0]) };
@@ -4189,8 +4277,10 @@ ipcMain.handle('commission:getConfig', async () => {
 // Exposes the single source of truth to the renderer so every screen
 // (dashboard, reports, remittance, members, SOA) uses one set of rules.
 
-ipcMain.handle('business:getRules', async () => {
+ipcMain.handle('business:getRules', async (event) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const cfg = await getCommissionConfigSql(db.getPool());
     return {
       success: true,
@@ -4251,6 +4341,8 @@ ipcMain.handle('commission:saveConfig', async (event, config) => {
 
 ipcMain.handle('branches:list', async (event, { page = 1, pageSize = 50, search, status } = {}) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const pool = db.getPool();
     pageSize = Math.min(Math.max(1, pageSize || 50), 100000);
     const offset = Math.max(0, (page - 1)) * pageSize;
@@ -4329,8 +4421,10 @@ ipcMain.handle('branches:delete', async (event, { id }) => {
   }
 });
 
-ipcMain.handle('branches:active', async () => {
+ipcMain.handle('branches:active', async (event) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const [rows] = await db.getPool().execute("SELECT Id, Code, Name, Address FROM branches WHERE Status = 'Active' ORDER BY Id ASC");
     return { success: true, data: rows };
   } catch (error) {
@@ -4342,6 +4436,8 @@ ipcMain.handle('branches:active', async () => {
 
 ipcMain.handle('personnel:list', async (event, { page = 1, pageSize = 50, search, branchId } = {}) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     const pool = db.getPool();
     pageSize = Math.min(Math.max(1, pageSize || 50), 100000);
     const offset = Math.max(0, (page - 1)) * pageSize;
@@ -4368,8 +4464,10 @@ ipcMain.handle('personnel:list', async (event, { page = 1, pageSize = 50, search
   }
 });
 
-ipcMain.handle('personnel:listByBranch', async (event, { branchId }) => {
+ipcMain.handle('personnel:listByBranch', async (event, { branchId } = {}) => {
   try {
+    const g = authGuard(event);
+    if (!g.ok) return { success: false, error: g.error };
     if (!branchId) return { success: true, data: [] };
     const [rows] = await db.getPool().execute(
       "SELECT Id, FullName, Position FROM personnel WHERE BranchId = ? AND Status = 'Active' ORDER BY FullName ASC",
