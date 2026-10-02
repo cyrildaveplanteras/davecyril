@@ -673,7 +673,7 @@ function buildRemittanceSlipFragment(data, monthLabel) {
       <div>
         <div class="org-name">GOLDENHOPE DAMAYAN ASSOCIATION AND SUPPORT INC.</div>
         <div class="org-addr">${escapeHtml(data.BranchAddress || 'Poblacion, Manukan, Zamboanga del Norte')}</div>
-        <div class="org-sec">SEC REG. NO. 2025110227750-03</div>
+        <div class="org-sec">SEC REG. NO. ${ORG_SEC_REG_NO}</div>
       </div>
     </div>
   </div>
@@ -840,7 +840,7 @@ function buildRemittanceSlipHTML(data) {
       <div>
         <div class="org-name">GOLDENHOPE DAMAYAN ASSOCIATION AND SUPPORT INC.</div>
         <div class="org-addr">${escapeHtml(data.BranchAddress || 'Poblacion, Manukan, Zamboanga del Norte')}</div>
-        <div class="org-sec">SEC REG. NO. 2025110227750-03</div>
+        <div class="org-sec">SEC REG. NO. ${ORG_SEC_REG_NO}</div>
       </div>
     </div>
   </div>
@@ -2217,7 +2217,7 @@ function generateMMLHTML(logoUrl) {
     <div class="header-center">
       <div class="org-name">GoldenHope Damayan Association and Support Inc.</div>
       <div class="org-address">Poblacion, Manukan, Zamboanga del Norte</div>
-      <div class="sec-reg">SEC REG. NO. 2025110227750</div>
+      <div class="sec-reg">SEC REG. NO. ${ORG_SEC_REG_NO}</div>
     </div>
   </div>
 </div>
@@ -2552,7 +2552,7 @@ function generateRFRHTML(logoUrl, orientation) {
   ${logoHtml}
   <div class="org-name">GoldenHope Damayan Association and Support Inc.</div>
   <div class="org-address">Population, Manukan, Zamboanga del Norte, Philippines</div>
-  <div class="sec-reg">SEC Registration No.: 202510227750</div>
+  <div class="sec-reg">SEC Registration No.: ${ORG_SEC_REG_NO}</div>
 </div>
 <div class="report-title">
   <h1>Ready for Renewal</h1>
@@ -2794,7 +2794,7 @@ function generateDFMHTML(logoUrl, orientation) {
   ${logoHtml}
   <div class="org-name">GoldenHope Damayan Association and Support Inc.</div>
   <div class="org-address">Population, Manukan, Zamboanga del Norte, Philippines</div>
-  <div class="sec-reg">SEC Registration No.: 202510227750</div>
+  <div class="sec-reg">SEC Registration No.: ${ORG_SEC_REG_NO}</div>
 </div>
 <div class="report-title">
   <h1>Subscription (Due for MSC)</h1>

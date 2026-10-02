@@ -1509,7 +1509,7 @@ async function generateMemberFormHTML(member) {
   <div class="header-center">
     <div class="org-name">GOLDENHOPE</div>
     <div class="org-sub">Damayan Association and Support Inc.</div>
-    <div class="sec-bar white-text">SEC REGISTRATION NO. 2025110227750-03</div>
+    <div class="sec-bar white-text">SEC REGISTRATION NO. ${ORG_SEC_REG_NO}</div>
   </div>
 </div>
 
@@ -1710,7 +1710,7 @@ async function generateMemberFormHTML(member) {
 </div>
 
 <!-- ===== FOOTER ===== -->
-<div class="footer"><span>SEC REGISTRATION NO. 20251102277580-03</span></div>
+      <div class="footer"><span>SEC REGISTRATION NO. ${ORG_SEC_REG_NO}</span></div>
 
 </body></html>`;
   return html;

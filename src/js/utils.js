@@ -1,3 +1,9 @@
+// ===== ORGANIZATION IDENTITY =====
+// Single source of truth for printed forms and reports. Previously the SEC
+// registration number was hardcoded with several different (typo) values
+// across templates; keep it here so every render uses the same number.
+const ORG_SEC_REG_NO = '2025110227750-03';
+
 // ===== TOAST NOTIFICATIONS =====
 function showToast(message, type = 'success', duration = 4000) {
   const container = document.getElementById('toastContainer');

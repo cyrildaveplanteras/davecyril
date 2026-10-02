@@ -280,7 +280,7 @@ function generateRemittanceSlipHTML(data) {
     <div>
       <div class="org-name">GOLDENHOPE DAMAYAN ASSOCIATION AND SUPPORT INC.</div>
       <div class="org-addr">${escapeHtml(data.BranchAddress || 'Poblacion, Manukan, Zamboanga del Norte')}</div>
-      <div class="org-sec">SEC REG. NO. 2025110227750-03</div>
+      <div class="org-sec">SEC REG. NO. ${ORG_SEC_REG_NO}</div>
     </div>
   </div>
 </div>
