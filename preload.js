@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   logout: () => ipcRenderer.invoke('auth:logout'),
   me: () => ipcRenderer.invoke('auth:me'),
   diagnose: () => ipcRenderer.invoke('db:diagnose'),
+  logRendererError: (err) => ipcRenderer.invoke('app:logRendererError', err),
 
   // Members
   getMembers: (opts) => ipcRenderer.invoke('members:list', opts || {}),

@@ -102,7 +102,34 @@ for (const f of jsFiles) {
 check('found the expected SEC label sites', secLabels >= 7, `found ${secLabels}`);
 
 // ---------------------------------------------------------------------------
-// 5. settings.js avatar state machine (cancel must not drop the saved photo)
+// 5. Every renderer api.X() call is actually exposed by preload.js
+// ---------------------------------------------------------------------------
+console.log('\n[preload API surface]');
+function walk(dir, exts, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, exts, out);
+    else if (exts.some(x => p.endsWith(x))) out.push(p);
+  }
+  return out;
+}
+const preloadSrc = read('preload.js');
+const apiMethods = new Set();
+let am;
+const apiDeclRe = /^\s{2}([A-Za-z_$][\w$]*)\s*:/gm;
+while ((am = apiDeclRe.exec(preloadSrc)) !== null) apiMethods.add(am[1]);
+const rendererText = walk(path.join(ROOT, 'src'), ['.js', '.html'])
+  .map(f => fs.readFileSync(f, 'utf8')).join('\n');
+const called = new Set();
+let cm;
+const apiCallRe = /\.api\.([A-Za-z_$][\w$]*)\s*\(/g;
+while ((cm = apiCallRe.exec(rendererText)) !== null) called.add(cm[1]);
+const missingMethods = [...called].filter(name => !apiMethods.has(name));
+check('every api.X() call exists in preload.js', missingMethods.length === 0, missingMethods.join(', '));
+check('renderer error logging is wired', apiMethods.has('logRendererError') && called.has('logRendererError'));
+
+// ---------------------------------------------------------------------------
+// 6. settings.js avatar state machine (cancel must not drop the saved photo)
 // ---------------------------------------------------------------------------
 console.log('\n[avatar state machine]');
 function makeEl(init) {
