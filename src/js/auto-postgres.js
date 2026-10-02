@@ -3,16 +3,30 @@ const path = require('path');
 const fs = require('fs');
 const net = require('net');
 
-const PG_PORT = parseInt(process.env.DB_PORT, 10) || 5433;
+// Config values are read lazily rather than captured at module load. The
+// first-run setup dialog can change DB_PORT / PG_BIN_DIR / PG_DATA_DIR after
+// this module has been required, and those values must take effect immediately
+// instead of silently keeping the pre-setup defaults.
+const DEFAULT_PG_PORT = 5433;
+const DEFAULT_PG_BIN_DIR = 'C:\\Program Files\\PostgreSQL\\17\\bin';
+const DEFAULT_PG_DATA_DIR = 'C:\\gh-postgres\\data';
+
 const POLL_INTERVAL = 800;
 const START_TIMEOUT = 60000;
 const STOP_TIMEOUT = 15000;
 
-const PG_BIN_DIR = process.env.PG_BIN_DIR || 'C:\\Program Files\\PostgreSQL\\17\\bin';
-const PG_DATA_DIR = process.env.PG_DATA_DIR || 'C:\\gh-postgres\\data';
+function pgPort() {
+  return parseInt(process.env.DB_PORT, 10) || DEFAULT_PG_PORT;
+}
+function pgBinDirEnv() {
+  return process.env.PG_BIN_DIR || DEFAULT_PG_BIN_DIR;
+}
+function pgDataDirEnv() {
+  return process.env.PG_DATA_DIR || DEFAULT_PG_DATA_DIR;
+}
 
 const PG_PATH_CANDIDATES = [
-  PG_BIN_DIR,
+  pgBinDirEnv(),
   'C:\\gh-postgres\\pgsql\\bin',
   'C:\\Program Files\\PostgreSQL\\17\\bin',
   'C:\\Program Files\\PostgreSQL\\16\\bin',
@@ -20,6 +34,7 @@ const PG_PATH_CANDIDATES = [
 ];
 
 let startedByUs = false;
+let startedDataDir = null;
 
 function findPgBinDir() {
   for (const dir of PG_PATH_CANDIDATES) {
@@ -65,11 +80,12 @@ function startPostgres(binDir) {
   if (!fs.existsSync(pgCtlPath)) {
     throw new Error(`pg_ctl not found at ${pgCtlPath}`);
   }
-  if (!fs.existsSync(PG_DATA_DIR)) {
-    throw new Error(`PostgreSQL data directory not found at ${PG_DATA_DIR}`);
+  const dataDir = pgDataDirEnv();
+  if (!fs.existsSync(dataDir)) {
+    throw new Error(`PostgreSQL data directory not found at ${dataDir}`);
   }
 
-  const args = ['start', '-D', PG_DATA_DIR, '-w', '-l', path.join(PG_DATA_DIR, 'server.log')];
+  const args = ['start', '-D', dataDir, '-w', '-l', path.join(dataDir, 'server.log')];
   console.log(`auto-postgres: Starting PostgreSQL: ${pgCtlPath} ${args.join(' ')}`);
 
   const proc = spawn(pgCtlPath, args, {
@@ -86,8 +102,11 @@ function startPostgres(binDir) {
 }
 
 function stopPostgres(binDir) {
+  // Stop the cluster this process actually started, which may differ from the
+  // currently configured data directory if setup changed it.
+  const dataDir = startedDataDir || pgDataDirEnv();
   const pgCtlPath = path.join(binDir, 'pg_ctl.exe');
-  const args = ['stop', '-D', PG_DATA_DIR, '-m', 'fast', '-t', String(STOP_TIMEOUT)];
+  const args = ['stop', '-D', dataDir, '-m', 'fast', '-t', String(STOP_TIMEOUT)];
   console.log(`auto-postgres: Stopping PostgreSQL: ${pgCtlPath} ${args.join(' ')}`);
   const proc = spawn(pgCtlPath, args, {
     stdio: 'ignore',
@@ -100,11 +119,12 @@ function stopPostgres(binDir) {
 }
 
 async function ensurePostgresRunning() {
-  console.log('auto-postgres: Checking PostgreSQL service...');
+  const port = pgPort();
+  console.log(`auto-postgres: Checking PostgreSQL service on port ${port}...`);
 
-  const alreadyRunning = await isPortOpen(PG_PORT);
+  const alreadyRunning = await isPortOpen(port);
   if (alreadyRunning) {
-    console.log(`auto-postgres: PostgreSQL already running on port ${PG_PORT}`);
+    console.log(`auto-postgres: PostgreSQL already running on port ${port}`);
     return;
   }
 
@@ -117,7 +137,8 @@ async function ensurePostgresRunning() {
   try {
     startPostgres(binDir);
     startedByUs = true;
-    await waitForPort(PG_PORT, START_TIMEOUT, `PostgreSQL (port ${PG_PORT})`);
+    startedDataDir = pgDataDirEnv();
+    await waitForPort(port, START_TIMEOUT, `PostgreSQL (port ${port})`);
   } catch (err) {
     console.error('auto-postgres: Failed to start PostgreSQL:', err.message);
   }
@@ -127,12 +148,14 @@ async function cleanupPostgres() {
   if (!startedByUs) return;
   const binDir = findPgBinDir();
   if (!binDir) return;
+  const port = pgPort();
   stopPostgres(binDir);
   const start = Date.now();
   while (Date.now() - start < STOP_TIMEOUT) {
-    if (!(await isPortOpen(PG_PORT))) {
+    if (!(await isPortOpen(port))) {
       console.log('auto-postgres: PostgreSQL stopped cleanly');
       startedByUs = false;
+      startedDataDir = null;
       return;
     }
     await new Promise(r => setTimeout(r, POLL_INTERVAL));

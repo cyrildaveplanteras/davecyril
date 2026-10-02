@@ -76,8 +76,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "cyrildaveplanteras",
-      "repo": "davecyril",
+      "owner": "YOUR_GITHUB_OWNER",
+      "repo": "CHANGE_REPO",
       "releaseType": "release"
     }
   },

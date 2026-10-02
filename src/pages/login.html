@@ -163,7 +163,6 @@
           <textarea id="diagnoseReport" readonly placeholder="Click Diagnose again or press Copy Report to send the details to your administrator." style="width:100%;height:200px;font:11px/1.4 Consolas,monospace;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:10px;resize:vertical;white-space:pre-wrap"></textarea>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             <button type="button" id="copyReportBtn" class="login-btn" style="flex:1;min-width:130px">Copy Report</button>
-            <button type="button" id="resetAdminBtn" class="login-btn" style="flex:1;min-width:180px;background:#DC2626">Reset admin to 'admin'</button>
           </div>
           <div class="login-error" id="diagMsg" style="display:none;margin-top:8px"></div>
         </div>
@@ -352,18 +351,12 @@
         const r = {
           AppVersion: report.appVersion || '?',
           Packaged: report.packaged === true ? 'yes' : 'no',
-          DBEndpoint: (report.endpoint ? report.endpoint.user + '@' + report.endpoint.host + ':' + report.endpoint.port + '/' + report.endpoint.database + ' (password ' + report.endpoint.password + ')' : 'unknown'),
+          DBEndpoint: (report.endpoint ? report.endpoint.user + '@' + report.endpoint.host + ':' + report.endpoint.port + '/' + report.endpoint.database : 'unknown'),
           PG_BinDir: report.pgBinDir || '',
           PG_DataDir: report.pgDataDir || '',
+          Configured: report.configured === true ? 'yes' : 'no',
           DBReachable: report.reachable ? 'YES' : 'NO',
-          ConnectError: report.connectError || '',
-          UserCount: report.usersCount,
-          Users: (report.adminUsers || []).map(function (u) {
-            return '  #' + u.Id + ' "' + (u.Username || '') + '" role=' + (u.Role || '') + ' active=' + u.IsActive + ' locked=' + u.IsLocked + ' mustChange=' + u.MustChangePassword + ' hash=' + (u.hashScheme || '?') + ' lastLogin=' + (u.LastLogin || 'never');
-          }).join('\n'),
-          RecentFailedAttempts: (report.loginAttempts || []).map(function (a) {
-            return '  "' + a.username + '" attempts=' + a.attempt_count + ' lockedUntil=' + (a.locked_until || 'none');
-          }).join('\n') || '  none'
+          ConnectError: report.connectError || ''
         };
         const lines = [];
         for (const k in r) lines.push(k + ': ' + r[k]);
@@ -386,22 +379,6 @@
         }
       } catch (_) {
         showError('Copy failed. Select all the text above manually.');
-      }
-    });
-
-    document.getElementById('resetAdminBtn').addEventListener('click', async function () {
-      const msgEl = document.getElementById('diagMsg');
-      if (!window.confirm('This resets the admin account to username "admin" / password "admin" and forces a password change on next login. Continue?')) return;
-      try {
-        const res = await window.api.resetDefaultLogin(true);
-        msgEl.style.display = 'block';
-        msgEl.textContent = res.success
-          ? 'Admin has been reset. Sign in with admin / admin (you will be asked to set a new password).'
-          : 'Reset failed: ' + (res.error || 'unknown error');
-        await runDiagnose();
-      } catch (err) {
-        msgEl.style.display = 'block';
-        msgEl.textContent = 'Reset failed: ' + ((err && err.message) || String(err));
       }
     });
 

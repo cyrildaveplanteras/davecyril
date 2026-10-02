@@ -17,7 +17,6 @@ contextBridge.exposeInMainWorld('api', {
   logout: () => ipcRenderer.invoke('auth:logout'),
   me: () => ipcRenderer.invoke('auth:me'),
   diagnose: () => ipcRenderer.invoke('db:diagnose'),
-  resetDefaultLogin: (confirm) => ipcRenderer.invoke('db:resetDefaultLogin', { confirm }),
 
   // Members
   getMembers: (opts) => ipcRenderer.invoke('members:list', opts || {}),

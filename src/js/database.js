@@ -2,7 +2,9 @@ const { Pool, types } = require('pg');
 
 let pool = null;
 
-const PLACEHOLDER_PASSWORD = 'CHANGE_ME_STRONG_PASSWORD';
+// Minimal-length guidance only. Not a shipped default: it exists so an empty
+// or obviously weak configuration fails loudly instead of silently connecting.
+const MIN_PASSWORD_LENGTH = 12;
 
 // Case-sensitive identifiers that must be double-quoted in PostgreSQL so result
 // rows keep the exact column casing the renderer expects (MySQL-style keys).
@@ -164,18 +166,36 @@ function prepareStatement(sql) {
   return convertPlaceholders(stmt);
 }
 
+// Returns an error message when the configuration cannot support a connection,
+// otherwise null.
+//
+// There is deliberately NO built-in default password. An earlier version
+// fell back to a hardcoded literal, which meant a deployment that was missing
+// its .env silently ran on a credential that was published in version control
+// and shipped inside the installer. Callers must now supply the password
+// explicitly (see src/js/db-config.js and the first-run setup dialog).
 function validateDbConfig() {
   const password = process.env.DB_PASSWORD || '';
-  if (password === PLACEHOLDER_PASSWORD) {
-    console.warn('⚠️  SECURITY WARNING: Using default placeholder database password!');
-    console.warn('   Set a strong password in .env (DB_PASSWORD=your_strong_password)');
-    console.warn('   Generate with: openssl rand -base64 32');
-  } else if (!password) {
-    console.warn('⚠️  SECURITY WARNING: Database password is empty.');
-    console.warn('   For production, set a strong password in .env (DB_PASSWORD=your_strong_password)');
-  } else if (password.length < 12) {
-    console.warn('⚠️  SECURITY WARNING: Database password is too short (<12 chars)!');
+  if (!password) {
+    return 'No database password is configured. Run the GoldenHope first-run database setup, '
+      + 'or set DB_PASSWORD in %LOCALAPPDATA%\\GoldenHope\\db-config.json.';
   }
+  // Short passwords only warn. Throwing here would break installations that were
+  // configured before this check existed, so the length is reported but not
+  // enforced; the rotation advice is logged instead.
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    console.warn(
+      `SECURITY WARNING: the configured database password is shorter than ${MIN_PASSWORD_LENGTH} `
+      + `characters (${password.length}). Rotate it in PostgreSQL and update `
+      + '%LOCALAPPDATA%\\GoldenHope\\db-config.json.'
+    );
+  }
+  return null;
+}
+
+function requireValidDbConfig() {
+  const error = validateDbConfig();
+  if (error) throw new Error(error);
 }
 
 function poolConfig() {
@@ -183,7 +203,7 @@ function poolConfig() {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT, 10) || 5433,
     user: process.env.DB_USER || 'goldenhope',
-    password: process.env.DB_PASSWORD || 'REDACTED',
+    password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'goldenhope_db',
     max: parseInt(process.env.DB_CONNECTION_LIMIT, 10) || 10,
     idleTimeoutMillis: 30000,
@@ -194,11 +214,11 @@ function poolConfig() {
 }
 
 async function ensureDatabase() {
-  validateDbConfig();
+  requireValidDbConfig();
   const host = process.env.DB_HOST || 'localhost';
   const port = parseInt(process.env.DB_PORT, 10) || 5433;
   const user = process.env.DB_USER || 'goldenhope';
-  const password = process.env.DB_PASSWORD || 'REDACTED';
+  const password = process.env.DB_PASSWORD || '';
   const dbName = process.env.DB_NAME || 'goldenhope_db';
   const admin = new Pool({ host, port, user, password, database: 'postgres', max: 1, connectionTimeoutMillis: 15000 });
   try {
@@ -213,7 +233,7 @@ async function ensureDatabase() {
 
 function getPool() {
   if (!pool) {
-    validateDbConfig();
+    requireValidDbConfig();
     const pgPool = new Pool(poolConfig());
     pgPool.on('error', (err) => {
       console.error('[PG POOL] idle client error:', err.message);

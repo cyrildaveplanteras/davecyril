@@ -1,63 +1,10 @@
 require('dotenv').config();
 
-// Load db-config.json (project root) as a fallback config source. Real
-// environment variables and .env (loaded above) take precedence; db-config.json
-// only fills values that are still unset. This must run BEFORE requiring
-// ./src/js/database and ./src/js/auto-postgres, since auto-postgres reads
-// DB_PORT/PG_BIN_DIR/PG_DATA_DIR at module load time.
-(function loadDbConfigJson() {
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const applyConfig = (cfg) => {
-      if (!cfg) return;
-      const setIfMissing = (envKey, value) => {
-        if (value === undefined || value === null || value === '') return;
-        if (process.env[envKey] === undefined || process.env[envKey] === '') {
-          process.env[envKey] = String(value);
-        }
-      };
-      const d = cfg.database || {};
-      setIfMissing('DB_HOST', d.host);
-      setIfMissing('DB_PORT', d.port);
-      setIfMissing('DB_USER', d.user);
-      setIfMissing('DB_PASSWORD', d.password);
-      setIfMissing('DB_NAME', d.name);
-      setIfMissing('DB_TIMEZONE', d.timezone);
-      setIfMissing('DB_CONNECTION_LIMIT', d.connectionLimit);
-      const p = cfg.postgres || {};
-      setIfMissing('PG_BIN_DIR', p.binDir);
-      setIfMissing('PG_DATA_DIR', p.dataDir);
-    };
-    // Packaged config (inside app.asar) is read-only; load it as the base.
-    const pkgPath = path.join(__dirname, 'db-config.json');
-    let pkgCfg = null;
-    if (fs.existsSync(pkgPath)) {
-      try { pkgCfg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')); } catch (_) {}
-    }
-    // User-editable config lives in %LOCALAPPDATA%\GoldenHope\db-config.json.
-    // It overrides the packaged copy so the user can correct PG_BIN_DIR /
-    // credentials after install without reinstalling. Seed it from the packaged
-    // copy on first run so the file exists and is editable.
-    const userDir = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'GoldenHope') : null;
-    let userCfg = null;
-    if (userDir) {
-      const userPath = path.join(userDir, 'db-config.json');
-      if (fs.existsSync(userPath)) {
-        try { userCfg = JSON.parse(fs.readFileSync(userPath, 'utf8')); } catch (_) {}
-      } else if (pkgCfg) {
-        try {
-          if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
-          fs.copyFileSync(pkgPath, userPath);
-          userCfg = pkgCfg;
-        } catch (_) { /* cannot seed user config; fall back to packaged */ }
-      }
-    }
-    // Precedence: real env / .env  >  userData config  >  packaged config.
-    applyConfig(pkgCfg);
-    applyConfig(userCfg);
-  } catch (_) { /* ignore config load errors; rely on .env + built-in defaults */ }
-})();
+// Load the database configuration chain before requiring ./src/js/database and
+// ./src/js/auto-postgres, since auto-postgres reads DB_PORT/PG_BIN_DIR/PG_DATA_DIR
+// at module load time. See src/js/db-config.js for the precedence rules.
+const { loadDbConfig, hasUsableDbConfig, saveDbConfig } = require('./src/js/db-config');
+loadDbConfig(__dirname);
 
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
@@ -417,16 +364,10 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(async () => {
-  if (!gotTheLock) return;
-
-  // Auto-start PostgreSQL if not already running
-  try {
-    await ensurePostgresRunning();
-  } catch (pgErr) {
-    console.error('Failed to auto-start PostgreSQL:', pgErr.message);
-  }
-
+// Everything after the database configuration is resolved. Split out of
+// app.whenReady() so the first-run setup dialog and the normal boot path run
+// byte-identical startup logic.
+async function continueStartup() {
   // Ensure the database exists before creating pool
   try {
     await db.ensureDatabase();
@@ -473,7 +414,7 @@ app.whenReady().then(async () => {
 
   await releaseLock();
 
-createWindow();
+  createWindow();
 
   // Cross-device sync poller
   startSyncPolling();
@@ -491,6 +432,32 @@ createWindow();
   setInterval(checkBenefitEligibility, 6 * 60 * 60 * 1000);
   setInterval(checkPaymentMilestones, 6 * 60 * 60 * 1000);
   setInterval(checkOverdueRemittances, 6 * 60 * 60 * 1000);
+}
+
+app.whenReady().then(async () => {
+  if (!gotTheLock) return;
+
+  // Auto-start PostgreSQL if not already running. This only needs the port and
+  // the PostgreSQL directories, never the password, so it runs before the
+  // first-run configuration gate below.
+  try {
+    await ensurePostgresRunning();
+  } catch (pgErr) {
+    console.error('Failed to auto-start PostgreSQL:', pgErr.message);
+  }
+
+  // First-run gate: the database password is never shipped in the installer, so
+  // a machine that has not been configured yet is sent to the setup dialog
+  // before anything touches the database. Existing installations already have
+  // a password in %LOCALAPPDATA%\GoldenHope\db-config.json and never see it.
+  if (!hasUsableDbConfig()) {
+    console.log('[SETUP] No usable database configuration found; starting first-run setup.');
+    registerDbSetupIPCHandlers();
+    createDbSetupWindow();
+    return;
+  }
+
+  await continueStartup();
 });
 
 app.on('window-all-closed', () => {
@@ -498,7 +465,15 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length !== 0) return;
+  // If first-run setup was dismissed without saving, reopen setup rather than
+  // dropping the user on a login screen that cannot reach the database.
+  if (!hasUsableDbConfig()) {
+    registerDbSetupIPCHandlers();
+    createDbSetupWindow();
+    return;
+  }
+  createWindow();
 });
 
 app.on('before-quit', () => {
@@ -516,6 +491,236 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   console.error('[DIAG] unhandledRejection: ' + (reason && reason.stack ? reason.stack : reason));
 });
+
+// ===== FIRST-RUN DATABASE SETUP =====
+// The database password is deliberately NOT shipped in the installer. On a
+// machine that has never been configured, startup stops here and asks for the
+// connection details instead of falling back to a built-in credential.
+//
+// Security properties:
+//  - Runs only while no usable configuration exists (main.js whenReady gate).
+//  - A one-way latch (dbSetupLatch) disables every handler once a config has
+//    been saved, so a compromised renderer can never repoint an already
+//    configured install at a server it controls.
+//  - "Test connection" opens a throwaway pool that is always closed, and never
+//    creates or modifies anything.
+//  - The saved file lives in %LOCALAPPDATA%, readable only by that Windows user.
+let dbSetupLatch = false;
+let dbSetupWindow = null;
+let dbSetupHandlersRegistered = false;
+
+function dbSetupDefaults() {
+  return {
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: process.env.DB_PORT || '5433',
+    database: process.env.DB_NAME || 'goldenhope_db',
+    user: process.env.DB_USER || 'goldenhope',
+    pgBinDir: process.env.PG_BIN_DIR || 'C:\\Program Files\\PostgreSQL\\17\\bin',
+    pgDataDir: process.env.PG_DATA_DIR || 'C:\\Program Files\\PostgreSQL\\17\\data'
+  };
+}
+
+// Normalises and bounds-checks what the setup page sent. Anything unexpected
+// becomes an error rather than being passed to the driver.
+function validateDbSetupInput(raw) {
+  const cfg = raw || {};
+  const str = (v) => (v === undefined || v === null ? '' : String(v).trim());
+  const out = {};
+
+  out.host = str(cfg.host) || '127.0.0.1';
+  if (out.host.length > 255) return { error: 'Host name is too long.' };
+
+  out.port = parseInt(cfg.port, 10);
+  if (!Number.isInteger(out.port) || out.port < 1 || out.port > 65535) {
+    return { error: 'Port must be a number between 1 and 65535.' };
+  }
+
+  out.database = str(cfg.database);
+  if (!out.database) return { error: 'Database name is required.' };
+  if (out.database.length > 63) return { error: 'Database name is too long.' };
+  // Identifiers are used as-is in quoted CREATE DATABASE statements.
+  if (!/^[A-Za-z_][A-Za-z0-9_$-]*$/.test(out.database)) {
+    return { error: 'Database name may only contain letters, digits, underscores and dashes.' };
+  }
+
+  out.user = str(cfg.user);
+  if (!out.user) return { error: 'Database username is required.' };
+  if (out.user.length > 63) return { error: 'Database username is too long.' };
+
+  out.password = cfg.password === undefined || cfg.password === null ? '' : String(cfg.password);
+  if (!out.password) return { error: 'Database password is required.' };
+  // Bound the value so it cannot be used to bloat process.env or the saved file.
+  if (out.password.length > 512) return { error: 'Database password is too long.' };
+
+  return { value: out };
+}
+
+// Opens a read-only connection with the candidate settings: proves the server
+// is reachable with these credentials and reports whether the target database
+// already exists. Never creates the database and never runs DDL.
+async function probeDbConnection(cfg) {
+  const { Pool } = require('pg');
+  const adminPool = new Pool({
+    host: cfg.host,
+    port: cfg.port,
+    user: cfg.user,
+    password: cfg.password,
+    database: 'postgres',
+    max: 1,
+    connectionTimeoutMillis: 10000
+  });
+  let databaseExists = false;
+  try {
+    const res = await adminPool.query(
+      'SELECT 1 FROM pg_database WHERE datname = $1',
+      [cfg.database]
+    );
+    databaseExists = res.rowCount > 0;
+  } finally {
+    try { await adminPool.end(); } catch (_) { /* never let cleanup mask the real error */ }
+  }
+  return { databaseExists };
+}
+
+// classifyLoginError() is tuned for the login screen and hardcodes port 5433 in
+// its "database not ready" message, which would be actively misleading on the
+// setup screen where the port is whatever the user just typed. This produces
+// messages that reflect the candidate settings.
+function classifySetupError(error, cfg) {
+  const code = (error && (error.code || error.sqlState)) || '';
+  const msg = (error && (error.sqlMessage || error.message)) || '';
+  const haystack = `${code} ${msg}`;
+
+  if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|socket hang up|connection refused/i.test(haystack)) {
+    return `Cannot reach a PostgreSQL server at ${cfg.host}:${cfg.port}. `
+      + 'Check that PostgreSQL is running and that the host and port are correct.';
+  }
+  if (/ENOTFOUND|getaddrinfo|no such host/i.test(haystack)) {
+    return `The host name "${cfg.host}" could not be resolved.`;
+  }
+  if (/28P01|password authentication failed/i.test(haystack)) {
+    return `PostgreSQL rejected the password for user "${cfg.user}".`;
+  }
+  if (/3D000|database .* does not exist/i.test(haystack)) {
+    // Reachable and authenticated, but this database is absent. That is the
+    // normal state on a brand new machine, not a failure.
+    return `PostgreSQL is reachable, but the maintenance database "postgres" could not be opened. `
+      + 'That database must exist for GoldenHope to create its own database.';
+  }
+  if (/role .* does not exist|28000/i.test(haystack)) {
+    return `PostgreSQL rejected the username "${cfg.user}". Create the role first, or use an existing one.`;
+  }
+  if (/SSL not enabled|ssl/i.test(haystack) && /server does not support/i.test(haystack)) {
+    return 'The PostgreSQL server rejected the SSL negotiation. Try a different host or port.';
+  }
+  // Anything unrecognised is still shown, just masked of SQL details.
+  return maskSqlError(error);
+}
+
+function registerDbSetupIPCHandlers() {
+  // ipcMain.handle() throws if a channel is registered twice, and this function
+  // is reachable from both the startup gate and the macOS activate handler.
+  if (dbSetupHandlersRegistered) return;
+  dbSetupHandlersRegistered = true;
+
+  ipcMain.handle('dbsetup:defaults', () => ({ success: true, defaults: dbSetupDefaults() }));
+
+  ipcMain.handle('dbsetup:test', async (_event, raw) => {
+    if (dbSetupLatch) return { success: false, error: 'This machine is already configured.' };
+    const checked = validateDbSetupInput(raw);
+    if (checked.error) return { success: false, error: checked.error };
+    try {
+      const info = await probeDbConnection(checked.value);
+      return {
+        success: true,
+        databaseExists: info.databaseExists,
+        message: info.databaseExists
+          ? 'Connected. The database "' + checked.value.database + '" already exists.'
+          : 'Connected. The database "' + checked.value.database + '" does not exist yet and will be created on first launch.'
+      };
+    } catch (error) {
+      return { success: false, error: classifySetupError(error, checked.value) };
+    }
+  });
+
+  ipcMain.handle('dbsetup:save', async (_event, raw) => {
+    if (dbSetupLatch) return { success: false, error: 'This machine is already configured.' };
+    const checked = validateDbSetupInput(raw);
+    if (checked.error) return { success: false, error: checked.error };
+    // Never trust a previous "Test connection" click: re-verify before saving.
+    try {
+      await probeDbConnection(checked.value);
+    } catch (error) {
+      return { success: false, error: 'Could not connect with those settings: ' + classifySetupError(error, checked.value) };
+    }
+    const saved = saveDbConfig(__dirname, {
+      database: {
+        host: checked.value.host,
+        port: checked.value.port,
+        user: checked.value.user,
+        password: checked.value.password,
+        name: checked.value.database
+      }
+    });
+    if (!saved.success) return { success: false, error: saved.error };
+
+    // Latch before anything else can race in, then discard the cached pool so
+    // the next getPool() builds one from the freshly saved configuration.
+    dbSetupLatch = true;
+    try { db.resetPool(); } catch (_) { /* pool was never created */ }
+    return { success: true };
+  });
+
+  // Fired by the setup page after a successful save so the main process can
+  // tear the window down and continue booting.
+  ipcMain.handle('dbsetup:continue', async () => {
+    if (!dbSetupLatch) return { success: false, error: 'Save the configuration first.' };
+    if (dbSetupWindow && !dbSetupWindow.isDestroyed()) dbSetupWindow.close();
+    dbSetupWindow = null;
+    // ensurePostgresRunning() already ran at startup against the pre-setup port.
+    // Setup may have changed it, so re-check: this is a no-op when the port is
+    // already open and only starts a cluster when the new port is not served.
+    try {
+      await ensurePostgresRunning();
+    } catch (pgErr) {
+      console.error('Failed to auto-start PostgreSQL after setup:', pgErr.message);
+    }
+    await continueStartup();
+    return { success: true };
+  });
+}
+
+function createDbSetupWindow() {
+  dbSetupWindow = new BrowserWindow({
+    width: 520,
+    height: 640,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    backgroundColor: '#0F172A',
+    title: 'GoldenHope - Database Setup',
+    icon: path.join(__dirname, 'assets', 'logo.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-dbsetup.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      csp: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"
+    }
+  });
+
+  dbSetupWindow.webContents.on('will-navigate', (e, url) => {
+    // Same allowlist approach as the main window: this page may only ever be
+    // itself. Anything else (remote origin, another local page) is refused.
+    const allowed = url.startsWith('file://') && url.includes('/src/pages/db-setup.html');
+    if (!allowed) e.preventDefault();
+  });
+  dbSetupWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  dbSetupWindow.loadFile(path.join(__dirname, 'src', 'pages', 'db-setup.html')).catch((err) => {
+    console.error('Failed to load the database setup page:', err.message);
+  });
+  dbSetupWindow.on('closed', () => { dbSetupWindow = null; });
+}
 
 // ===== AUTH IPC HANDLERS =====
 
@@ -4856,11 +5061,17 @@ ipcMain.handle('app:logRendererError', (_event, err) => {
 });
 
 // ---- Login/DB diagnostics (read-only) ---------------------------------------
-// Produces a copyable report so the exact reason a login fails (locked account,
-// missing user, incompatible hash, DB down, wrong config) is visible instead of
-// a generic message. Never writes to the database.
+// Produces a copyable report so the exact reason a login fails (DB down, wrong
+// host/port, missing config) is visible instead of a generic message. Never
+// writes to the database.
+//
+// SECURITY: this handler is intentionally reachable BEFORE authentication,
+// because it exists to help someone who cannot log in. That is exactly why it
+// must return nothing an attacker could use. It therefore reports connectivity
+// and effective configuration ONLY - never user rows, roles, account states,
+// login-attempt usernames, or any part of the database password. Those were
+// removed deliberately; do not add them back.
 ipcMain.handle('db:diagnose', async () => {
-  const maskPassword = (pw) => (pw ? String(pw).slice(0, 2) + '***' : '(unset)');
   const out = {
     appVersion: app.getVersion(),
     packaged: app.isPackaged,
@@ -4868,67 +5079,33 @@ ipcMain.handle('db:diagnose', async () => {
       host: process.env.DB_HOST || '127.0.0.1',
       port: process.env.DB_PORT || '5432',
       user: process.env.DB_USER || 'goldenhope',
-      database: process.env.DB_NAME || 'goldenhope_db',
-      password: maskPassword(process.env.DB_PASSWORD)
+      database: process.env.DB_NAME || 'goldenhope_db'
     },
     pgBinDir: process.env.PG_BIN_DIR || '(default search)',
     pgDataDir: process.env.PG_DATA_DIR || '(default search)',
+    configured: !!process.env.DB_PASSWORD,
     reachable: false,
-    connectError: null,
-    usersCount: null,
-    adminUsers: [],
-    loginAttempts: []
+    connectError: null
   };
+  if (!out.configured) {
+    out.connectError = 'No database password configured. Run the GoldenHope first-run database setup.';
+    return out;
+  }
   try {
     const pool = db.getPool();
     const [ping] = await pool.execute('SELECT 1 AS ok');
-    out.reachable = ping && ping[0] && ping[0].ok === 1;
-    const [uc] = await pool.execute('SELECT COUNT(*) AS cnt FROM "users"');
-    out.usersCount = uc[0] ? uc[0].cnt : null;
-    const [admins] = await pool.execute(
-      'SELECT "Id","Username","FullName","Role","IsActive","IsLocked","MustChangePassword","LastLogin",left("PasswordHash",7) AS hashScheme FROM "users" ORDER BY "Id"'
-    );
-    out.adminUsers = admins || [];
-    const [attempts] = await pool.execute(
-      'SELECT username, attempt_count, locked_until FROM login_attempts ORDER BY last_attempt DESC LIMIT 10'
-    );
-    out.loginAttempts = attempts || [];
+    out.reachable = !!(ping && ping[0] && ping[0].ok === 1);
   } catch (error) {
     out.reachable = false;
-    const code = (error && (error.code || error.sqlState)) || '';
-    const msg = (error && (error.sqlMessage || error.message)) || '';
-    out.connectError = `${code} ${msg}`.trim();
+    out.connectError = classifyLoginError(error).error || maskSqlError(error);
   }
   return out;
 });
 
-// ---- Emergency admin reset (explicit user action only) ----------------------
-// Re-locks nothing beyond the admin account: sets the `admin` row back to
-// password "admin" (bcrypt), forces a password change on next login, clears
-// lock flags. Returns crisp errors so the diagnose panel can explain why not.
-ipcMain.handle('db:resetDefaultLogin', async (_event, payload) => {
-  if (!payload || payload.confirm !== true) {
-    return { success: false, error: 'Confirmation required.' };
-  }
-  try {
-    const pool = db.getPool();
-    const [rows] = await pool.execute(
-      'SELECT "Id" FROM "users" WHERE LOWER("Username") = LOWER(?)',
-      ['admin']
-    );
-    if (!rows || rows.length === 0) {
-      return { success: false, error: 'No admin account was found.' };
-    }
-    const hash = bcrypt.hashSync('admin', bcrypt.genSaltSync(10));
-    await pool.execute(
-      'UPDATE "users" SET "PasswordHash" = ?, "MustChangePassword" = 1, "IsActive" = 1, "IsLocked" = 0 WHERE LOWER("Username") = LOWER(?)',
-      [hash, 'admin']
-    );
-    try {
-      await pool.execute('DELETE FROM login_attempts WHERE LOWER(username) = LOWER(?)', ['admin']);
-    } catch (_) {}
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: classifyLoginError(error).error || maskSqlError(error) };
-  }
-});
+// NOTE: the former `db:resetDefaultLogin` emergency-reset handler was removed.
+// It required no authentication, so anyone who could reach the login window
+// could reset the `admin` account to a known password and clear its lockout.
+// Recovery is done directly against PostgreSQL instead (see
+// docs/PGADMIN_SETUP.md -> "Forgotten admin password"):
+//   ALTER USER goldenhope WITH PASSWORD '<new strong password>';
+

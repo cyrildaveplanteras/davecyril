@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'">
+<title>GoldenHope - Database Setup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0F172A; color: #E2E8F0; padding: 28px 32px; font-size: 14px;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .logo img { width: 34px; height: 34px; border-radius: 8px; }
+  .logo h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .logo p { font-size: 12px; color: #94A3B8; margin-top: 2px; }
+  .intro {
+    background: #1E293B; border: 1px solid #334155; border-left: 3px solid #2563EB;
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 22px; color: #CBD5E1;
+    font-size: 12.5px; line-height: 1.55;
+  }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: #CBD5E1; margin-bottom: 5px; }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+  input {
+    width: 100%; padding: 9px 11px; background: #0B1220; color: #E2E8F0;
+    border: 1px solid #334155; border-radius: 6px; font-size: 13px; font-family: inherit;
+  }
+  input:focus { outline: none; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.18); }
+  .hint { font-size: 11.5px; color: #64748B; margin-top: 4px; line-height: 1.45; }
+  .actions { display: flex; gap: 10px; margin-top: 22px; }
+  button {
+    flex: 1; padding: 11px 16px; font-size: 13.5px; font-weight: 600; font-family: inherit;
+    border: none; border-radius: 7px; cursor: pointer; transition: background 0.15s;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-test { background: #334155; color: #E2E8F0; }
+  .btn-test:hover:not(:disabled) { background: #475569; }
+  .btn-save { background: #2563EB; color: #fff; }
+  .btn-save:hover:not(:disabled) { background: #1D4ED8; }
+  .status {
+    margin-top: 16px; padding: 11px 13px; border-radius: 7px; font-size: 12.5px;
+    line-height: 1.5; display: none; word-break: break-word;
+  }
+  .status.show { display: block; }
+  .status.ok { background: #052E1A; border: 1px solid #166534; color: #86EFAC; }
+  .status.err { background: #2A0B0B; border: 1px solid #991B1B; color: #FCA5A5; }
+  .status.busy { background: #1E293B; border: 1px solid #334155; color: #CBD5E1; }
+  .path { margin-top: 18px; font-size: 11px; color: #475569; line-height: 1.5; word-break: break-all; }
+  code { font-family: Consolas, 'Courier New', monospace; color: #94A3B8; }
+</style>
+</head>
+<body>
+  <div class="logo">
+    <img src="../../assets/logo.png" alt="GoldenHope">
+    <div>
+      <h1>Database Setup</h1>
+      <p>First-run configuration</p>
+    </div>
+  </div>
+
+  <div class="intro">
+    GoldenHope has not been configured on this computer yet. Enter the PostgreSQL
+    connection details for this office. Test the connection before saving &mdash;
+    nothing is written to disk until the test succeeds.
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="host">Host</label>
+      <input type="text" id="host" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field" style="max-width:110px">
+      <label for="port">Port</label>
+      <input type="text" id="port" inputmode="numeric" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="database">Database name</label>
+      <input type="text" id="database" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="user">Username</label>
+      <input type="text" id="user" autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="password">Password</label>
+    <input type="password" id="password" autocomplete="off">
+    <div class="hint">Stored in <code>%LOCALAPPDATA%\GoldenHope\db-config.json</code>, which only the current Windows user can read. It is never included in the installer.</div>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="btn-test" id="testBtn">Test Connection</button>
+    <button type="button" class="btn-save" id="saveBtn" disabled>Save and Continue</button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <script src="../js/db-setup.js"></script>
+</body>
+</html>
