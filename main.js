@@ -2418,7 +2418,7 @@ ipcMain.handle('remittances:dashboard-summary', async (event, { period, startDat
 // ===== COORDINATORS IPC HANDLERS =====
 
 ipcMain.handle('coordinators:list', async (event, { type, page = 1, pageSize = 50, search } = {}) => {
-  const g = authGuard(event);
+  const g = authGuard(event, ['Admin', 'Branch Manager']);
   if (!g.ok) return { success: false, error: g.error };
   try {
     const pool = db.getPool();
@@ -2445,7 +2445,7 @@ ipcMain.handle('coordinators:list', async (event, { type, page = 1, pageSize = 5
 
 ipcMain.handle('coordinators:save', async (event, { type, coordinator }) => {
   try {
-    const g = authGuard(event);
+    const g = authGuard(event, ['Admin', 'Branch Manager']);
     if (!g.ok) return { success: false, error: g.error };
     const pool = db.getPool();
     const locked = await rejectIfLocked(pool);
@@ -2487,7 +2487,7 @@ ipcMain.handle('coordinators:save', async (event, { type, coordinator }) => {
 
 ipcMain.handle('coordinators:delete', async (event, { type, id }) => {
   try {
-    const g = authGuard(event);
+    const g = authGuard(event, ['Admin', 'Branch Manager']);
     if (!g.ok) return { success: false, error: g.error };
     if (type !== 'barangay' && type !== 'sales') return { success: false, error: 'Invalid coordinator type' };
     const pool = db.getPool();

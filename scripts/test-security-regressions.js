@@ -132,6 +132,12 @@ check('boot re-validates the session', /window\.api\.me\s*\(/.test(appSrc) && /!
 const loginSrc = read('src/pages/login.html');
 const dupSuccess = /logActivity\([^)]*'Login'[^)]*'Success'/.test(loginSrc);
 check('successful login is not audit-logged twice', !dupSuccess, 'login.html must not log successful logins (auth:login does)');
+const mainSrc = read('main.js');
+const gated = ['coordinators:list', 'coordinators:save', 'coordinators:delete']
+  .every(ch => new RegExp(ch + "[\\s\\S]{0,160}authGuard\\(event, \\['Admin', 'Branch Manager'\\]\\)").test(mainSrc));
+check('coordinators list/save/delete are role-gated', gated, 'these handlers must require Admin or Branch Manager');
+const activeOpen = /coordinators:active[\s\S]{0,160}authGuard\(event\);/.test(mainSrc);
+check('coordinators active list stays session-only', activeOpen, 'members/remittance/reports need it for all roles');
 
 // ---------------------------------------------------------------------------
 // 6. settings.js avatar state machine (cancel must not drop the saved photo)
