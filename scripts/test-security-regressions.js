@@ -138,6 +138,10 @@ const gated = ['coordinators:list', 'coordinators:save', 'coordinators:delete']
 check('coordinators list/save/delete are role-gated', gated, 'these handlers must require Admin or Branch Manager');
 const activeOpen = /coordinators:active[\s\S]{0,160}authGuard\(event\);/.test(mainSrc);
 check('coordinators active list stays session-only', activeOpen, 'members/remittance/reports need it for all roles');
+check('org settings writes are Admin-only', /ADMIN_ONLY_SETTING_KEYS[\s\S]{0,220}g\.session\.role !== 'Admin'/.test(mainSrc), 'settings:set must gate org_* keys to Admin');
+const settingsPageSrc = read('src/js/settings.js');
+check('org settings read-only for non-Admins', /const orgReadonly = isSuperAdmin \? '' : 'disabled'/.test(settingsPageSrc), 'non-Admins must not edit org settings');
+check('backup tab hidden from non-Admins', /isSuperAdmin \? `<div class="tab-content" id="tab-backup">/.test(settingsPageSrc), 'Backup tab must be Admin-only');
 
 // ---------------------------------------------------------------------------
 // 6. settings.js avatar state machine (cancel must not drop the saved photo)

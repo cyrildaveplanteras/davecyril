@@ -3344,6 +3344,10 @@ ipcMain.handle('settings:get', async (event, { key }) => {
 // to plant misleading values. Keep this list in sync with the `keys` array in
 // src/js/settings.js and the getSetting() call in src/js/app.js.
 const ALLOWED_SETTING_KEYS = ['org_name', 'org_address', 'org_contact', 'org_email', 'auto_download_updates'];
+// Organization identity is printed on official reports, so writing it is an
+// administrative action. auto_download_updates is a per-machine preference and
+// stays writable by any authenticated user.
+const ADMIN_ONLY_SETTING_KEYS = ['org_name', 'org_address', 'org_contact', 'org_email'];
 const MAX_SETTING_VALUE_LENGTH = 4000;
 
 ipcMain.handle('settings:set', async (event, { key, value } = {}) => {
@@ -3352,6 +3356,9 @@ ipcMain.handle('settings:set', async (event, { key, value } = {}) => {
     if (!g.ok) return { success: false, error: g.error };
     if (!ALLOWED_SETTING_KEYS.includes(key)) {
       return { success: false, error: 'Unknown setting key.' };
+    }
+    if (ADMIN_ONLY_SETTING_KEYS.includes(key) && g.session.role !== 'Admin') {
+      return { success: false, error: 'You do not have permission to change organization settings.' };
     }
     const pool = db.getPool();
     const locked = await rejectIfLocked(pool);

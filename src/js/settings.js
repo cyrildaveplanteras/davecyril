@@ -22,6 +22,9 @@ async function renderSettings() {
   const user = getCurrentUser();
   const isAdmin = ['Admin', 'Branch Manager'].includes(user?.role);
   const isSuperAdmin = user?.role === 'Admin';
+  const orgReadonly = isSuperAdmin ? '' : 'disabled';
+  const orgSaveHidden = isSuperAdmin ? '' : 'style="display:none"';
+  const orgHint = isSuperAdmin ? '' : '<p style="font-size:13px;color:var(--text-light);margin-top:8px">Only an Administrator can change organization settings.</p>';
 
   area.innerHTML = `
     <div class="card">
@@ -31,17 +34,18 @@ async function renderSettings() {
           <div class="tab" data-tab="security" onclick="switchSettingsTab('security')">Security</div>
           ${isAdmin ? '<div class="tab" data-tab="users" onclick="switchSettingsTab(\'users\')">Users</div>' : ''}
           ${isSuperAdmin ? '<div class="tab" data-tab="logs" onclick="switchSettingsTab(\'logs\')">Activity Logs</div>' : ''}
-          <div class="tab" data-tab="backup" onclick="switchSettingsTab(\'backup\')">Backup &amp; Restore</div>
+          ${isSuperAdmin ? '<div class="tab" data-tab="backup" onclick="switchSettingsTab(\'backup\')">Backup &amp; Restore</div>' : ''}
         </div>
 
         <div class="tab-content active" id="tab-general">
           <div class="form-grid">
-            <div class="form-group"><label>Organization Name</label><input type="text" id="sOrgName" value="GoldenHope"></div>
-            <div class="form-group"><label>Address</label><input type="text" id="sAddress"></div>
-            <div class="form-group"><label>Contact Number</label><input type="text" id="sContact"></div>
-            <div class="form-group"><label>Email</label><input type="email" id="sEmail"></div>
+            <div class="form-group"><label>Organization Name</label><input type="text" id="sOrgName" value="GoldenHope" ${orgReadonly}></div>
+            <div class="form-group"><label>Address</label><input type="text" id="sAddress" ${orgReadonly}></div>
+            <div class="form-group"><label>Contact Number</label><input type="text" id="sContact" ${orgReadonly}></div>
+            <div class="form-group"><label>Email</label><input type="email" id="sEmail" ${orgReadonly}></div>
           </div>
-          <div class="mt-4"><button class="btn btn-primary" onclick="saveGeneralSettings()">Save Settings</button></div>
+          <div class="mt-4" ${orgSaveHidden}><button class="btn btn-primary" onclick="saveGeneralSettings()">Save Settings</button></div>
+          ${orgHint}
 
           <div class="card mt-4" style="padding:20px;border:1px solid var(--border)">
             <h4 style="margin:0 0 4px;font-size:15px;font-weight:700">Application Updates</h4>
@@ -172,7 +176,7 @@ async function renderSettings() {
           </div>
         </div>
 
-        <div class="tab-content" id="tab-backup">
+        ${isSuperAdmin ? `<div class="tab-content" id="tab-backup">
           <div class="form-grid">
             <div class="card" style="padding:20px;text-align:center;border:2px dashed var(--border)">
               <p style="font-size:14px;margin-bottom:12px;color:var(--text-secondary)">Create a backup of the entire database</p>
@@ -183,7 +187,7 @@ async function renderSettings() {
               <button class="btn btn-danger" onclick="restoreDatabase()">&#128190; Restore Backup</button>
             </div>
           </div>
-        </div>
+        </div>` : ''}
       </div>
     </div>`;
 
