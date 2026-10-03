@@ -3923,7 +3923,7 @@ ipcMain.handle('settings:restore', async (event, { filepath }) => {
 
 // ===== DIALOG IPC =====
 ipcMain.handle('dialog:openFile', async (event) => {
-  const g = authGuard(event);
+  const g = authGuard(event, ['Admin']);
   if (!g.ok) return { success: false, error: g.error };
   const { dialog } = require('electron');
   const result = await dialog.showOpenDialog({

@@ -142,6 +142,7 @@ check('org settings writes are Admin-only', /ADMIN_ONLY_SETTING_KEYS[\s\S]{0,220
 const settingsPageSrc = read('src/js/settings.js');
 check('org settings read-only for non-Admins', /const orgReadonly = isSuperAdmin \? '' : 'disabled'/.test(settingsPageSrc), 'non-Admins must not edit org settings');
 check('backup tab hidden from non-Admins', /isSuperAdmin \? `<div class="tab-content" id="tab-backup">/.test(settingsPageSrc), 'Backup tab must be Admin-only');
+check('backup file picker is Admin-only', /dialog:openFile[\s\S]{0,120}authGuard\(event, \['Admin'\]\)/.test(mainSrc), 'dialog:openFile must require Admin');
 
 // ---------------------------------------------------------------------------
 // 6. settings.js avatar state machine (cancel must not drop the saved photo)
