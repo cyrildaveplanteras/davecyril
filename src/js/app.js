@@ -39,8 +39,33 @@ const rolePages = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const user = getCurrentUser();
+  let user = getCurrentUser();
   if (!user) {
+    window.location.href = 'login.html';
+    return;
+  }
+
+  // The renderer's sessionStorage survives page reloads, but the main process
+  // keeps sessions in memory only. Re-validate against the main process so a
+  // reload / crash recovery cannot leave a "logged-in" UI whose IPC calls all
+  // fail with "Not authenticated". If there is no live session, force re-login.
+  try {
+    const me = await window.api.me();
+    if (!me || !me.success || !me.user) {
+      sessionStorage.removeItem('currentUser');
+      window.location.href = 'login.html';
+      return;
+    }
+    // The main process is authoritative for identity/role; refresh the cache.
+    user = Object.assign({}, user, {
+      id: me.user.id,
+      username: me.user.username,
+      role: me.user.role
+    });
+    try { sessionStorage.setItem('currentUser', JSON.stringify(user)); } catch (_) {}
+  } catch (err) {
+    try { if (window.api && window.api.logRendererError) window.api.logRendererError('session re-validation failed: ' + ((err && err.stack) || String(err))); } catch (_) {}
+    sessionStorage.removeItem('currentUser');
     window.location.href = 'login.html';
     return;
   }
