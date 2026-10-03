@@ -129,6 +129,9 @@ check('every api.X() call exists in preload.js', missingMethods.length === 0, mi
 check('renderer error logging is wired', apiMethods.has('logRendererError') && called.has('logRendererError'));
 const appSrc = read('src/js/app.js');
 check('boot re-validates the session', /window\.api\.me\s*\(/.test(appSrc) && /!me\.success/.test(appSrc), 'app.js must call api.me() on boot and redirect when it fails');
+const loginSrc = read('src/pages/login.html');
+const dupSuccess = /logActivity\([^)]*'Login'[^)]*'Success'/.test(loginSrc);
+check('successful login is not audit-logged twice', !dupSuccess, 'login.html must not log successful logins (auth:login does)');
 
 // ---------------------------------------------------------------------------
 // 6. settings.js avatar state machine (cancel must not drop the saved photo)

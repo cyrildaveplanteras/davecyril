@@ -293,7 +293,8 @@
         if (result.success) {
           const userData = { ...result.user, mustChangePassword: result.mustChangePassword || false };
           sessionStorage.setItem('currentUser', JSON.stringify(userData));
-          try { await window.api.logActivity(result.user.id, 'Login', 'User ' + result.user.username + ' logged in successfully', '', userAgent, 'Success'); } catch (_) {}
+          // Successful logins are audited server-side in auth:login (identity
+          // derived from the DB row). Do not log a second time here.
           if (userData.mustChangePassword) {
             pendingUser = result.user;
             pendingCurrentPassword = password;
